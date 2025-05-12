@@ -1,0 +1,4 @@
+.vscode
+build
+test/testclient
+test/testserver
