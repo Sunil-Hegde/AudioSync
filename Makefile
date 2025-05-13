@@ -1,4 +1,12 @@
-CC = gcc
+OS := $(shell uname)
+# For Linux
+ifeq ($(OS), Linux)
+    CC = gcc
+endif
+# For macOS
+ifeq ($(OS), Darwin)
+    CC = clang
+endif
 CFLAGS = -std=c17 -Wall -Wextra -Werror
 BUILD_DIR = build
 SRC_DIR = src
