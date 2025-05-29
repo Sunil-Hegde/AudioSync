@@ -16,7 +16,7 @@
 
 void SetupSender(int *sock_fd);
 void SetupReceiver(char *ServerIP, int *sock_fd);
-void SendData(int *sock_fd, int *new_sock_fd, char *message);
+void SendData(int *sock_fd, char *message);
 void ReceiveData(int *sock_fd, char *buffer);
 
 #endif

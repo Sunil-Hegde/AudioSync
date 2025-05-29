@@ -6,7 +6,7 @@ void SetupSender(int *sock_fd){
 
     memset(&server_description, 0, sizeof server_description);
     server_description.ai_family = AF_INET;
-    server_description.ai_socktype = SOCK_STREAM;
+    server_description.ai_socktype = SOCK_DGRAM;
     server_description.ai_flags = AI_PASSIVE;
 
     getaddrinfo(NULL, PORT, &server_description, &server);
@@ -14,21 +14,31 @@ void SetupSender(int *sock_fd){
     *sock_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
     inet_ntop(AF_INET, &((struct sockaddr_in *)server->ai_addr)->sin_addr, server_ip, sizeof server_ip);
     bind(*sock_fd, server->ai_addr, server->ai_addrlen);
-    listen(*sock_fd, 5);
-    printf("Server running at IP: %s and port %s.\nWaiting for clients to connect...\n", server_ip, PORT);
+
+    printf("UDP Server running at IP: %s and port %s.\n", server_ip, PORT);
 }
 
-void SendData(int *sock_fd, int *new_sock_fd, char *message){
-    struct sockaddr_storage receiving_addr;
-    socklen_t receiving_address_size = sizeof receiving_addr;
+void SendData(int *sock_fd, char *message){
+    struct sockaddr_storage client_addr;
+    socklen_t client_addr_size = sizeof client_addr;
     char client_ip[INET6_ADDRSTRLEN];
+    char buffer[1024];
 
-    *new_sock_fd = accept(*sock_fd, (struct sockaddr *)&receiving_addr, &receiving_address_size);
-    struct sockaddr_in *client_addr = (struct sockaddr_in *)&receiving_addr;
-    inet_ntop(AF_INET, &client_addr->sin_addr, client_ip, sizeof client_ip);
-    printf("Clent connected! IP Address: %s\n", client_ip);
+    int bytes_received = recvfrom(*sock_fd, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&client_addr, &client_addr_size);
 
-    send(*new_sock_fd, message, strlen(message), 0);
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        
+        struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
+        inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
+        printf("Received from client %s: %s\n", client_ip, buffer);
+        
+        sendto(*sock_fd, message, strlen(message), 0, (struct sockaddr*)&client_addr, client_addr_size);
+        
+        printf("Sent response to client %s\n", client_ip);
+    } else {
+        perror("recvfrom failed");
+    }
 }
 
 void SetupReceiver(char *ServerIP, int *sock_fd){
@@ -37,16 +47,20 @@ void SetupReceiver(char *ServerIP, int *sock_fd){
 
     memset(&server_description, 0, sizeof server_description);
     server_description.ai_family = AF_INET;
-    server_description.ai_socktype = SOCK_STREAM;
+    server_description.ai_socktype = SOCK_DGRAM;
+
     getaddrinfo(ServerIP, PORT, &server_description, &server);
     *sock_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
 
-    printf("Connecting to server at IP: %s\n", ServerIP);
+    printf("Setting up client to server at IP: %s\n", ServerIP);
 
     status = connect(*sock_fd, server->ai_addr, server->ai_addrlen);
 
     if(status != -1){
         printf("Connected to server!\n");
+        char *message_from_client = "Hello!";
+        send(*sock_fd, message_from_client, strlen(message_from_client), 0);
+        printf("Sent initial message to server\n");
     } else {
         printf("Invalid IP\n");
     }
