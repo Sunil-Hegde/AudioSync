@@ -5,9 +5,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-
-#define RTP_MAX_PACKET_SIZE 1400   // Keep below typical MTU size
-#define RTP_PAYLOAD_SIZE (RTP_MAX_PACKET_SIZE - RTP_HEADER_SIZE)
+#include <unistd.h>
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -25,54 +23,55 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // RTP parameters
+    // Initialize RTP parameters
     uint16_t seq_num = 0;
     uint32_t timestamp = 0;
     uint32_t ssrc = rand();  // Random SSRC identifier
     
-    // Buffer for the complete RTP packet
-    uint8_t packet[RTP_MAX_PACKET_SIZE];
-    uint8_t *payload = packet + RTP_HEADER_SIZE;
+    RTPPacket rtp_packet;
+    uint8_t serialized_buffer[RTP_MAX_PACKET_SIZE];
+    uint8_t audio_buffer[RTP_MAX_PAYLOAD_SIZE];
+    size_t packet_size;
     
     printf("Starting RTP streaming from file: %s\n", argv[1]);
+    printf("SSRC: %u\n", ssrc);
     
     // Streaming loop
     while (1) {
-        // Prepare RTP header
-        RTPHeader header;
-        header.version = RTP_VERSION;
-        header.padding = 0;
-        header.extension = 0;
-        header.csrc_count = 0;
-        header.marker = 0;
-        header.payload_type = RTP_PAYLOAD_TYPE_PCM;
-        header.sequence_number = seq_num++;
-        header.timestamp = timestamp;
-        header.ssrc = ssrc;
-        
-        // Pack RTP header into packet
-        pack_rtp_header(&header, packet);
-        
-        // Read audio data into payload
-        size_t bytes_read = fread(payload, 1, RTP_PAYLOAD_SIZE, audio_file);
+        // Read audio data
+        size_t bytes_read = fread(audio_buffer, 1, RTP_MAX_PAYLOAD_SIZE, audio_file);
         
         if (bytes_read == 0) {
             // End of file, rewind to beginning for continuous streaming
+            printf("End of file reached, rewinding...\n");
             rewind(audio_file);
             continue;
         }
         
-        // Send RTP packet
-        SendBinaryData(&sock_fd, packet, RTP_HEADER_SIZE + bytes_read);
-        printf("Sent RTP packet: seq=%u, ts=%u, size=%zu\n", 
-               header.sequence_number, header.timestamp, bytes_read + RTP_HEADER_SIZE);
+        // Debug: Print first few bytes of audio data
+        printf("Audio data (first 8 bytes): ");
+        for (size_t i = 0; i < 8 && i < bytes_read; i++) {
+            printf("%02X ", audio_buffer[i]);
+        }
+        printf("\n");
         
-        // Update timestamp (assuming 8kHz sample rate, 160 samples per packet)
+        // Create RTP packet
+        create_rtp_packet(&rtp_packet, seq_num, timestamp, ssrc, audio_buffer, bytes_read);
+        
+        // Serialize packet for transmission
+        serialize_rtp_packet(&rtp_packet, serialized_buffer, &packet_size);
+        
+        // Send RTP packet
+        SendBinaryData(&sock_fd, serialized_buffer, packet_size);
+        printf("Sent RTP packet: seq=%u, ts=%u, size=%zu, payload=%zu bytes\n", 
+               seq_num, timestamp, packet_size, bytes_read);
+        
+        // Update sequence number and timestamp
+        seq_num++;
         timestamp += bytes_read / 2;  // For 16-bit PCM, each sample is 2 bytes
         
-        // Add small delay to simulate real-time streaming
-        struct timespec ts = {0, 20000000};  // 20ms
-        nanosleep(&ts, NULL);
+        // Small delay to control streaming rate (20ms)
+        usleep(20000);
     }
     
     fclose(audio_file);
