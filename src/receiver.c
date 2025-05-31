@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>  // Add this include for fcntl functions
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
@@ -44,21 +45,27 @@ int main(int argc, char *argv[]) {
             uint32_t total_samples = 0;
             
             while (1) {
-                if (receive_and_buffer_packet(sock_fd, &buffer) > 0) {
+                int result = receive_and_buffer_packet(sock_fd, &buffer);
+                
+                if (result > 0) {
+                    // Process audio packets
                     AudioPacket* packet;
                     while ((packet = get_next_ordered_packet(&buffer)) != NULL) {
                         printf("Writing packet %u with timestamp %llu\n", 
                               packet->PacketNumber, (unsigned long long)packet->timestamp_usec);
                         
+                        // Determine how many samples to write
+                        size_t samples_to_write = (packet->data_size > 0) ? packet->data_size : ChunkBytes;
+                        
                         // Write the audio data to the output file
                         size_t samples_written = fwrite(packet->AudioDataPCM, 
                                                        sizeof(uint16_t), 
-                                                       ChunkBytes, 
+                                                       samples_to_write, 
                                                        output_file);
                         
-                        if (samples_written != ChunkBytes) {
-                            fprintf(stderr, "Warning: Failed to write all samples. Expected %d, wrote %zu\n",
-                                   ChunkBytes, samples_written);
+                        if (samples_written != samples_to_write) {
+                            fprintf(stderr, "Warning: Failed to write all samples. Expected %zu, wrote %zu\n",
+                                   samples_to_write, samples_written);
                         }
                         
                         // Flush the file to ensure data is written
@@ -71,6 +78,26 @@ int main(int argc, char *argv[]) {
                                (float)(total_samples * sizeof(uint16_t)) / (1024.0 * 1024.0));
                         
                         free(packet);
+                    }
+                } else if (result == 0) {
+                    // Check if we received a termination message instead of an audio packet
+                    char end_buffer[32];
+                    
+                    // Set socket to non-blocking mode temporarily
+                    int flags = fcntl(sock_fd, F_GETFL, 0);
+                    fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
+                    
+                    int end_bytes = recv(sock_fd, end_buffer, sizeof(end_buffer) - 1, 0);
+                    
+                    // Set socket back to blocking mode
+                    fcntl(sock_fd, F_SETFL, flags);
+                    
+                    if (end_bytes > 0) {
+                        end_buffer[end_bytes] = '\0';
+                        if (strcmp(end_buffer, "STREAM_COMPLETE") == 0) {
+                            printf("Received stream completion message from sender.\n");
+                            break;  // Exit the reception loop
+                        }
                     }
                 }
                 

@@ -17,6 +17,7 @@ typedef struct AudioPacket{
     uint32_t PacketNumber;
     uint16_t AudioDataPCM[ChunkBytes];
     uint64_t timestamp_usec;
+    size_t data_size;  // Add this field to track actual data size
 } AudioPacket;
 
 typedef struct {
@@ -27,7 +28,7 @@ typedef struct {
 
 AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_data, size_t data_length);
 
-// Function to get current timestamp in microseconds
+
 uint64_t get_timestamp_usec(void);
 
 void init_audio_buffer(AudioBuffer* buffer);

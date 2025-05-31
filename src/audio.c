@@ -17,7 +17,12 @@ AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_dat
     
     packet->PacketNumber = packet_number;
     packet->timestamp_usec = get_timestamp_usec();
+    packet->data_size = data_length;  // Add this field to the AudioPacket struct
+    
+    // Zero out the entire buffer first
     memset(packet->AudioDataPCM, 0, sizeof(packet->AudioDataPCM));
+    
+    // Only copy the actual data we read
     size_t copy_length = (data_length < ChunkBytes) ? data_length : ChunkBytes;
     memcpy(packet->AudioDataPCM, pcm_data, copy_length * sizeof(uint16_t));
     

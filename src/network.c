@@ -27,18 +27,10 @@ void SetupSender(int *sock_fd){
     printf("UDP Server running at IP: %s and port %s.\n", server_ip, PORT);
 }
 
-void send_audio_packet(int sock_fd, const AudioPacket* packet) {
-    struct sockaddr_in client_addr;
-    
-    // Set up client address (receiver)
-    memset(&client_addr, 0, sizeof(client_addr));
-    client_addr.sin_family = AF_INET;
-    client_addr.sin_port = htons(12346); // Client listening port
-    inet_pton(AF_INET, "127.0.0.1", &client_addr.sin_addr); // Localhost or target IP
-    
+void send_audio_packet(int sock_fd, const AudioPacket* packet, const struct sockaddr* client_addr, socklen_t addr_len) {
     // Send the audio packet directly
     ssize_t bytes_sent = sendto(sock_fd, packet, sizeof(AudioPacket), 0,
-                               (struct sockaddr*)&client_addr, sizeof(client_addr));
+                               client_addr, addr_len);
     
     if (bytes_sent < 0) {
         perror("Failed to send audio packet");
@@ -245,32 +237,35 @@ void setup_and_stream_audio(FILE *audio_file) {
     printf("Starting audio stream...\n");
     uint32_t packet_number = 0;
     uint16_t audio_buffer[ChunkBytes];
+   
+    int done = 0;
     
-    while(1) {
+    while(!done) {
         // Read audio data from file
         size_t bytes_read = fread(audio_buffer, sizeof(uint16_t), ChunkBytes, audio_file);
         
         if (bytes_read == 0) {
-            printf("End of file reached, rewinding...\n");
-            rewind(audio_file);
-            continue;
+            printf("End of file reached, stopping stream.\n");
+            done = 1;
+            break;
         }
         
-        // Create audio packet
+        // Create audio packet with the actual number of bytes read
         AudioPacket* packet = create_audio_packet(packet_number, audio_buffer, bytes_read);
         if (!packet) {
             fprintf(stderr, "Failed to create audio packet\n");
             continue;
         }
         
-        // Send the packet - using the client address we got from the initial connection
+        // Log actual data size being sent
+        printf("Sent packet %u with %zu samples\n", packet->PacketNumber, bytes_read);
+        
+        // Send the packet using the client address we got from the initial connection
         ssize_t bytes_sent = sendto(sock_fd, packet, sizeof(AudioPacket), 0,
-                               (struct sockaddr*)&client_addr, client_addr_size);
+                              (struct sockaddr*)&client_addr, client_addr_size);
         
         if (bytes_sent < 0) {
             perror("Failed to send audio packet");
-        } else {
-            printf("Sent packet %u\n", packet->PacketNumber);
         }
         
         // Clean up
@@ -280,4 +275,16 @@ void setup_and_stream_audio(FILE *audio_file) {
         // Control the sending rate
         usleep(20000); // 20ms delay between packets, adjust as needed
     }
+    
+    // Add proper cleanup and shutdown when streaming is complete
+    printf("Audio streaming complete. Sent %u packets.\n", packet_number);
+    
+    // Send a termination message to the receiver
+    const char *end_msg = "STREAM_COMPLETE";
+    sendto(sock_fd, end_msg, strlen(end_msg), 0, 
+           (struct sockaddr*)&client_addr, client_addr_size);
+    
+    // Close the socket
+    close(sock_fd);
+    return;
 }

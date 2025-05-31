@@ -19,7 +19,7 @@ void SetupReceiver(const char *ServerIP, int *sock_fd);  // Changed char* to con
 void SendData(int *sock_fd, char *message);
 void ReceiveData(int *sock_fd, char *buffer);
 
-void send_audio_packet(int sock_fd, const AudioPacket *packet);
+void send_audio_packet(int sock_fd, const AudioPacket *packet, const struct sockaddr* client_addr, socklen_t addr_len);
 int receive_and_buffer_packet(int sock_fd, AudioBuffer *buffer);
 AudioPacket *get_next_ordered_packet(AudioBuffer *buffer);
 
