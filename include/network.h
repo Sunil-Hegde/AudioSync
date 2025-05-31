@@ -26,4 +26,7 @@ AudioPacket *get_next_ordered_packet(AudioBuffer *buffer);
 // New function to setup connection and stream audio
 void setup_and_stream_audio(FILE *audio_file);
 
+// Add new function for complete audio reception process
+void ReceiveAudio(const char *ServerIP, const char *output_filename);
+
 #endif
