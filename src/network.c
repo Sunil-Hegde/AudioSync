@@ -1,4 +1,4 @@
-#include "include/network.h"
+#include "network.h"
 
 void SetupSender(int *sock_fd){
     struct addrinfo server_description, *server;
@@ -74,4 +74,40 @@ void ReceiveData(int *sock_fd, char *buffer){
     } else {
         perror("recv");
     }
+}
+
+// Add these new functions:
+
+void SendBinaryData(int *sock_fd, const uint8_t *data, size_t length) {
+    struct sockaddr_storage client_addr;
+    socklen_t client_addr_size = sizeof client_addr;
+    char client_ip[INET6_ADDRSTRLEN];
+    char buffer[1024];
+
+    // Wait for client to connect/request data
+    int bytes_received = recvfrom(*sock_fd, buffer, sizeof(buffer) - 1, 0, 
+                                 (struct sockaddr *)&client_addr, &client_addr_size);
+
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        
+        struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
+        inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
+        printf("Client %s ready to receive\n", client_ip);
+        
+        // Send binary data
+        sendto(*sock_fd, data, length, 0, (struct sockaddr*)&client_addr, client_addr_size);
+        
+        printf("Sent %zu bytes to client %s\n", length, client_ip);
+    } else {
+        perror("recvfrom failed");
+    }
+}
+
+ssize_t ReceiveBinaryData(int *sock_fd, uint8_t *buffer, size_t max_length) {
+    ssize_t bytes_received = recv(*sock_fd, buffer, max_length, 0);
+    if (bytes_received <= 0) {
+        perror("recv failed");
+    }
+    return bytes_received;
 }
