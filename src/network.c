@@ -1,4 +1,4 @@
-#include "network.h"
+#include "include/network.h"
 
 void SetupSender(int *sock_fd){
     struct addrinfo server_description, *server;
@@ -7,10 +7,8 @@ void SetupSender(int *sock_fd){
     memset(&server_description, 0, sizeof server_description);
     server_description.ai_family = AF_INET;
     server_description.ai_socktype = SOCK_DGRAM;
-    server_description.ai_flags = AI_PASSIVE;
 
-    getaddrinfo(NULL, PORT, &server_description, &server);
-
+    getaddrinfo("0.0.0.0", PORT, &server_description, &server);
     *sock_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
     inet_ntop(AF_INET, &((struct sockaddr_in *)server->ai_addr)->sin_addr, server_ip, sizeof server_ip);
     bind(*sock_fd, server->ai_addr, server->ai_addrlen);
@@ -33,9 +31,11 @@ void SendData(int *sock_fd, char *message){
         inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
         printf("Received from client %s: %s\n", client_ip, buffer);
         
-        sendto(*sock_fd, message, strlen(message), 0, (struct sockaddr*)&client_addr, client_addr_size);
-        
-        printf("Sent response to client %s\n", client_ip);
+        while(1){
+            sendto(*sock_fd, message, strlen(message), 0, (struct sockaddr*)&client_addr, client_addr_size);
+            printf("Sent response to client %s\n", client_ip);
+            sleep(1);
+        }
     } else {
         perror("recvfrom failed");
     }
@@ -67,12 +67,14 @@ void SetupReceiver(char *ServerIP, int *sock_fd){
 }
 
 void ReceiveData(int *sock_fd, char *buffer){
-    int bytes_received = recv(*sock_fd, buffer, 1023, 0);
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';
-        printf("Message from server: %s\n", buffer);
-    } else {
-        perror("recv");
+    while(1){
+        int bytes_received = recv(*sock_fd, buffer, 1023, 0);
+        if (bytes_received > 0) {
+            buffer[bytes_received] = '\0';
+            printf("Message from server: %s\n", buffer);
+        } else {
+            perror("recv");
+        }
     }
 }
 
