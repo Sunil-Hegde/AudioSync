@@ -12,7 +12,7 @@ SRC_DIR = src
 SENDER = $(BUILD_DIR)/sender
 RECEIVER = $(BUILD_DIR)/receiver
 
-COMMON_SRC = $(SRC_DIR)/network.c $(SRC_DIR)/rtp.c
+COMMON_SRC = $(SRC_DIR)/network.c $(SRC_DIR)/audio.c
 SENDER_SRC = $(SRC_DIR)/sender.c $(COMMON_SRC)
 RECEIVER_SRC = $(SRC_DIR)/receiver.c $(COMMON_SRC)
 
