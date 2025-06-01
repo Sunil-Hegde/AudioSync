@@ -3,9 +3,12 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <unistd.h> 
+#include <stdlib.h>  
+#include <string.h>  
 #include <sys/time.h>
 #include <sys/socket.h>  
-#include <unistd.h> 
+
 // Sample Rate: 44.1k
 // Sample Format: 16-bit
 // Channels: 2

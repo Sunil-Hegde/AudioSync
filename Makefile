@@ -28,5 +28,5 @@ $(RECEIVER): $(RECEIVER_SRC)
 
 clean:
 	rm -f $(SENDER) $(RECEIVER)
-
+	rm output.raw
 .PHONY: all clean

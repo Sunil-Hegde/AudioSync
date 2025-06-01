@@ -1,15 +1,24 @@
 #ifndef NETWORK_H
 #define NETWORK_H
+
 #define _POSIX_C_SOURCE 200112L
+#define _DEFAULT_SOURCE
+
 #include "audio.h"
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <string.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+
 
 #define PORT "6000"
 

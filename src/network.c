@@ -1,16 +1,5 @@
 #include "network.h"
 #include "audio.h"
-#include <unistd.h>
-#include <stdint.h>
-#include <sys/socket.h>
-#include <stdio.h>      // For printf, perror
-#include <string.h>     // For memset, strlen
-#include <netdb.h>      // For getaddrinfo, addrinfo
-#include <arpa/inet.h>  // For inet_ntop, inet_pton
-#include <stdlib.h>     // For malloc, free
-#include <fcntl.h>      // For fcntl
-
-
 
 void SetupSender(int *sock_fd){
     struct addrinfo server_description, *server;
@@ -30,43 +19,40 @@ void SetupSender(int *sock_fd){
 
 
 
-void SendData(int *sock_fd, const AudioPacket *packet,size_t packet_size){
-    struct sockaddr_storage client_addr;
-    socklen_t client_addr_size = sizeof client_addr;
-    int client_connected=0;
+void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size){
+    static struct sockaddr_storage client_addr;  // Make static
+    static socklen_t client_addr_size = sizeof(client_addr);  // Make static
+    static int client_connected = 0;  // Make static - persists between calls
     
     if(!client_connected)
     {
-    char client_ip[INET6_ADDRSTRLEN];
-    char buffer[1024];
+        char client_ip[INET6_ADDRSTRLEN];
+        char buffer[1024];
 
-    int bytes_received = recvfrom(*sock_fd, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&client_addr, &client_addr_size);
+        int bytes_received = recvfrom(*sock_fd, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&client_addr, &client_addr_size);
 
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';
-        struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
-        inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
-        printf("Received from client %s: %s\n", client_ip, buffer);
-        client_connected = 1;
-         const char *confirm_msg = "READY_TO_STREAM";
-        sendto(*sock_fd, confirm_msg, strlen(confirm_msg), 0, 
-          (struct sockaddr*)&client_addr, client_addr_size);
-    } else {
-        perror("recvfrom failed");
+        if (bytes_received > 0) {
+            buffer[bytes_received] = '\0';
+            struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
+            inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
+            printf("Received from client %s: %s\n", client_ip, buffer);
+            client_connected = 1;  // This will now persist
+            const char *confirm_msg = "READY_TO_STREAM";
+            sendto(*sock_fd, confirm_msg, strlen(confirm_msg), 0, (struct sockaddr*)&client_addr, client_addr_size);
+        } else {
+            perror("recvfrom failed");
+        }
     }
-    }
 
-if(client_connected){
-    ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0, 
-                               (struct sockaddr*)&client_addr, client_addr_size);
-
-     if (bytes_sent > 0) {
-        printf("Sent packet %u\n", packet->PacketNumber);
-    } else {
-        perror("Failed to send packet");
-        client_connected = 0;  
+    if(client_connected){
+        ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0, (struct sockaddr*)&client_addr, client_addr_size);
+        if (bytes_sent > 0) {
+            printf("Sent packet %u\n", packet->PacketNumber);
+        } else {
+            perror("Failed to send packet");
+            client_connected = 0;  
+        }
     }
-}
 }
 
 void SetupReceiver(const char *ServerIP, int *sock_fd){

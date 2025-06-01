@@ -1,5 +1,6 @@
 .vscode
 build
-
+test
+output.raw
 
 baby.mp3

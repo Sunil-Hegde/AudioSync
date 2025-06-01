@@ -1,7 +1,4 @@
 #include "audio.h"
-#include <stdlib.h>  // for malloc
-#include <string.h>  // for memset, memcpy
-#include <sys/time.h> // for gettimeofday
 
 uint64_t get_timestamp_ms(void) {
     struct timeval tv;
