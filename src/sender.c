@@ -22,8 +22,7 @@ int main(int argc, char *argv[]) {
     printf("Starting audio streaming from file: %s\n", argv[1]);
     printf("Chunk size: %d samples\n", ChunkBytes);
     
-    // Use the new function that sets up connection and streams audio
-    setup_and_stream_audio(audio_file);
+    PacketSetupAndSend(audio_file);
     
     fclose(audio_file);
     return 0;
