@@ -1,4 +1,8 @@
 #include "audio.h"
+#include <stdlib.h>  // for malloc
+#include <string.h>  // for memset, memcpy
+#include <sys/time.h> // for gettimeofday
+
 
 uint64_t get_timestamp_ms(void) {
     struct timeval tv;
@@ -21,58 +25,35 @@ AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_dat
 
 void init_circular_buffer(AudioBuffer* buffer) {
     memset(buffer->packets, 0, sizeof(buffer->packets));
-    buffer->head = 0;
-    buffer->tail = 0;
+    // buffer->head = 0;
+    // buffer->tail = 0;
     buffer->count = 0;
     buffer->next_expected_seq = 0;
 }
 
 AudioPacket* GetNextPacket(AudioBuffer* buffer) {
  
-    for (int i = 0; i < buffer->count; i++) {
-        int idx = (buffer->tail + i) % MAX_BUFFER_SIZE;
-        if (buffer->packets[idx] &&
-            buffer->packets[idx]->PacketNumber == buffer->next_expected_seq) {
+      if (buffer->count == 0) {
+        printf("Buffer empty, no packets to deliver\n");
+        return NULL;
+    }
 
-            AudioPacket* packet = buffer->packets[idx];
-
+     uint32_t expected_index = buffer->next_expected_seq % MAX_BUFFER_SIZE;
+      if (buffer->packets[expected_index] != NULL && 
+        buffer->packets[expected_index]->PacketNumber == buffer->next_expected_seq) {
         
-            for (int j = i; j < buffer->count - 1; j++) {
-                int curr_idx = (buffer->tail + j) % MAX_BUFFER_SIZE;
-                int next_idx = (buffer->tail + j + 1) % MAX_BUFFER_SIZE;
-                buffer->packets[curr_idx] = buffer->packets[next_idx];
-            }
-
+        AudioPacket* packet = buffer->packets[expected_index];
+        buffer->packets[expected_index] = NULL;  
+        buffer->count--;
+        buffer->next_expected_seq++;
         
-            int last_idx = (buffer->tail + buffer->count - 1) % MAX_BUFFER_SIZE;
-            buffer->packets[last_idx] = NULL;
-            buffer->count--;
-
-            buffer->next_expected_seq++;
-            printf("Delivering packet %u in order\n", packet->PacketNumber);
-            return packet;
-        }
+        printf("Delivering packet %u in order\n", packet->PacketNumber);
+        return packet;
     }
-
-
-    uint32_t min_seq = UINT32_MAX;
-    for (int i = 0; i < buffer->count; i++) {
-        int idx = (buffer->tail + i) % MAX_BUFFER_SIZE;
-        if (buffer->packets[idx] &&
-            buffer->packets[idx]->PacketNumber < min_seq) {
-            min_seq = buffer->packets[idx]->PacketNumber;
-        }
-    }
-
-    if (min_seq != UINT32_MAX &&
-        min_seq > buffer->next_expected_seq + MAX_OUT_OF_ORDER) {
-        printf("Gap detected: skipping packets %u to %u\n",
-               buffer->next_expected_seq, min_seq - 1);
-        buffer->next_expected_seq = min_seq;
-        return GetNextPacket(buffer); 
-    }
-
-    return NULL; 
+    
+    printf("Packet %u not ready yet (expected at index %u)\n", 
+           buffer->next_expected_seq, expected_index);
+    return NULL;
 }
 
 
@@ -101,23 +82,24 @@ int ReceiveBufferPacket(int sock_fd,AudioBuffer* buffer)
     if (bytes_received != sizeof(AudioPacket)) {
         printf("Warning: Received incomplete packet (%zd bytes)\n", bytes_received);
         free(received_packet);
-        return 0;
+        return -1;
     }
 
     printf("Received packet %u, timestamp: %u ms\n", 
        received_packet->PacketNumber, received_packet->timestamp_ms);
 
-     if (buffer->count >= MAX_BUFFER_SIZE) {
-    
-        free(buffer->packets[buffer->tail]);
-        buffer->packets[buffer->tail] = NULL;
-        buffer->tail = (buffer->tail + 1) % MAX_BUFFER_SIZE;
+        uint32_t buffer_index = received_packet->PacketNumber % MAX_BUFFER_SIZE;
+        if (buffer->packets[buffer_index] != NULL) {
+        printf("Replacing packet at index %u\n", buffer_index);
+        free(buffer->packets[buffer_index]);
         buffer->count--;
-    }
+        }
+         buffer->packets[buffer_index] = received_packet;
+        buffer->count++;
+         printf("Buffered packet %u at index %u (total: %d packets)\n", 
+           received_packet->PacketNumber, buffer_index, buffer->count);
     
-    buffer->packets[buffer->head] = received_packet;
-    buffer->head = (buffer->head + 1) % MAX_BUFFER_SIZE;
-    buffer->count++;
-    return 1;
-}
+    return 1; 
+    
 
+}

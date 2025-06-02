@@ -13,7 +13,7 @@
 // Sample Format: 16-bit
 // Channels: 2
 // Chunk Duration: 25ms
-#define ChunkBytes 4408
+#define ChunkBytes 680
 
 #define MAX_BUFFER_SIZE 50
 #define MAX_OUT_OF_ORDER 10
@@ -26,8 +26,8 @@ typedef struct AudioPacket{
 
 typedef struct {
     AudioPacket* packets[MAX_BUFFER_SIZE];
-    int head;                    // Next position to write (newest)
-    int tail;                    // Oldest packet position
+    // int head;                    // Next position to write (newest)
+    // int tail;                    // Oldest packet position
     int count;                   // Number of packets in buffer
     uint32_t next_expected_seq;  // For rebuilding audio in order
 } AudioBuffer;
