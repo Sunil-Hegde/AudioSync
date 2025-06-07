@@ -1,4 +1,6 @@
 .vscode
 build
-test/testclient
-test/testserver
+test
+output.raw
+
+baby.mp3

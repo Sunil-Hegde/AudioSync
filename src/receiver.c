@@ -1,14 +1,20 @@
-#include "include/network.h"
+#include "network.h"
+#include "audio.h"
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 
-int main(){
-    char ServerIP[INET6_ADDRSTRLEN];
-    printf("Enter server IP address: ");
-    scanf("%s", ServerIP);
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <sender_ip> \n", argv[0]);
+        return 1;
+    }
     
-    int sock_fd;
-    char buffer[1024];
-
-    SetupReceiver(ServerIP, &sock_fd);
-    ReceiveData(&sock_fd, buffer);
+    const char *server_ip = argv[1];
+    AudioBuffer buffer;
+    init_circular_buffer(&buffer);
+    ReceiveAudio(server_ip, &buffer);
+    
     return 0;
 }
