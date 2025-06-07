@@ -6,6 +6,7 @@ else
 endif
 
 CFLAGS = -Wall -Wextra -I./include
+LDFLAGS = -lportaudio -lpthread
 BUILD_DIR = build
 SRC_DIR = src
 
@@ -20,13 +21,13 @@ all: $(SENDER) $(RECEIVER)
 
 $(SENDER): $(SENDER_SRC)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 $(RECEIVER): $(RECEIVER_SRC)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -f $(SENDER) $(RECEIVER)
-	rm output.raw
+	rm -f output.raw
 .PHONY: all clean

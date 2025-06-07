@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
     }
     
     printf("Starting audio streaming from file: %s\n", argv[1]);
-    printf("Chunk size: %d samples\n", ChunkBytes);
+    printf("Chunk size: %d Bytes\n", ChunkBytes);
     
     PacketSetupAndSend(audio_file);
     

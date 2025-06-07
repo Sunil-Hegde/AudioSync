@@ -19,14 +19,17 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include <portaudio.h>
+
 
 #define PORT "6000"
 
 void SetupSender(int *sock_fd);
-void SetupReceiver(const char *ServerIP, int *sock_fd);  
 void SendData(int *sock_fd, const AudioPacket *packet,size_t packet_size);
+void SetupReceiver(const char *ServerIP, int *sock_fd);  
 int ReceiveData(int *sock_fd, char *buffer);
 void PacketSetupAndSend(FILE *audio_file);
-void ReceiveAudio(const char *ServerIP);
+void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer);
+
 
 #endif

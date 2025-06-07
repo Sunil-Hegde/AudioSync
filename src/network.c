@@ -1,6 +1,7 @@
 #include "network.h"
 #include "audio.h"
 
+
 void SetupSender(int *sock_fd){
     struct addrinfo server_description, *server;
     char server_ip[INET6_ADDRSTRLEN];
@@ -17,15 +18,12 @@ void SetupSender(int *sock_fd){
     printf("UDP Server running at IP: %s and port %s.\n", server_ip, PORT);
 }
 
-
-
 void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size){
-    static struct sockaddr_storage client_addr;  // Make static
-    static socklen_t client_addr_size = sizeof(client_addr);  // Make static
-    static int client_connected = 0;  // Make static - persists between calls
+    static struct sockaddr_storage client_addr;  
+    static socklen_t client_addr_size = sizeof(client_addr);  
+    static int client_connected = 0;  
     
-    if(!client_connected)
-    {
+    if(!client_connected){
         char client_ip[INET6_ADDRSTRLEN];
         char buffer[1024];
 
@@ -36,7 +34,7 @@ void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size){
             struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
             inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
             printf("Received from client %s: %s\n", client_ip, buffer);
-            client_connected = 1;  // This will now persist
+            client_connected = 1; 
             const char *confirm_msg = "READY_TO_STREAM";
             sendto(*sock_fd, confirm_msg, strlen(confirm_msg), 0, (struct sockaddr*)&client_addr, client_addr_size);
         } else {
@@ -86,11 +84,9 @@ int ReceiveData(int *sock_fd, char *buffer){
         if (bytes_received > 0) {
             buffer[bytes_received] = '\0';
             printf("Message from server: %s\n", buffer);
-            if(strcmp(buffer,"READY_TO_STREAM")==0)
-            {
+            if(strcmp(buffer,"READY_TO_STREAM")==0){
                 printf("Receiving audio..");
                 return 1;
-                
             }
         } else {
             perror("recv");
@@ -99,35 +95,32 @@ int ReceiveData(int *sock_fd, char *buffer){
     }
 }
 
-void PacketSetupAndSend(FILE *audio_file)
-{
+void PacketSetupAndSend(FILE *audio_file){
     int sock_fd;
     SetupSender(&sock_fd);
     printf("Starting stream..");
     
     uint32_t packet_number = 0;
-    uint16_t audio_buffer[ChunkBytes];
+    uint16_t audio_buffer[PCM_DATA_SIZE_IN_ELEMENTS]; 
     int done=0;
-    while(!done)
-    {
-        size_t bytes_read=fread(audio_buffer,sizeof(uint16_t),ChunkBytes,audio_file); 
-        if(bytes_read == 0) {
+    while(!done){
+        size_t elements_read = fread(audio_buffer, sizeof(uint16_t), PCM_DATA_SIZE_IN_ELEMENTS, audio_file); 
+        if(elements_read == 0) {
             printf("End of file reached, stopping stream.\n");
             done = 1;
             break;
         }
-
-        AudioPacket* packet = create_audio_packet(packet_number, audio_buffer,bytes_read);
+        AudioPacket* packet = create_audio_packet(packet_number, audio_buffer, elements_read);
         if (!packet) {
             fprintf(stderr, "Failed to create audio packet\n");
             continue;
         }
-        size_t packet_size = sizeof(AudioPacket) + (bytes_read * sizeof(uint16_t));
+        size_t packet_size = sizeof(AudioPacket);
         SendData(&sock_fd, packet,packet_size);
         
         free(packet);
         packet_number++;
-        usleep(20000);     
+        usleep(25000);     
     }
 
     printf("Audio streaming complete. Sent %u packets.\n", packet_number);
@@ -137,44 +130,79 @@ void PacketSetupAndSend(FILE *audio_file)
 
 }
 
+static int networkAudioCallback(
+    const void *inputBuffer, void *outputBuffer,
+    unsigned long framesPerBuffer,
+    const PaStreamCallbackTimeInfo* timeInfo,
+    PaStreamCallbackFlags statusFlags,
+    void *userData
+) {
+    (void)inputBuffer; (void)timeInfo; (void)statusFlags;
+    
+    AudioBuffer *buffer = (AudioBuffer*)userData;
+    int16_t *out = (int16_t*)outputBuffer;
+    size_t samplesToWrite = framesPerBuffer * CHANNELS;
 
+    AudioPacket* packet = GetNextPacket(buffer);
+    if (packet != NULL) {
+        memcpy(out, packet->AudioDataPCM, samplesToWrite * sizeof(int16_t));
+        free(packet);
+        return paContinue;
+    } else {
+        memset(out, 0, samplesToWrite * sizeof(int16_t));
+        return paContinue; 
+    }
+}
 
-void ReceiveAudio(const char *ServerIP)
-{
+void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
     int sock_fd;
-    AudioBuffer buffer;
-    init_circular_buffer(&buffer);
     char msg_buffer[1024];
     FILE *output_file = fopen("output.raw", "wb");
     if (!output_file) {
         perror("Failed to open output file");
         return;
     }
+    Pa_Initialize();
+    
+    PaStream *stream;
+    PaStreamParameters output;
+    output.device = Pa_GetDefaultOutputDevice();
+    output.channelCount = CHANNELS;
+    output.sampleFormat = paInt16;
+    output.suggestedLatency = Pa_GetDeviceInfo(output.device)->defaultLowOutputLatency;
+    output.hostApiSpecificStreamInfo = NULL;
+
+    Pa_OpenStream(&stream, NULL, &output,
+        SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff,
+        networkAudioCallback, buffer);
 
     SetupReceiver(ServerIP, &sock_fd);
-    memset(buffer.packets, 0, sizeof(buffer.packets));
-    buffer.next_expected_seq = 0;
-  
+    memset(buffer->packets, 0, sizeof(buffer->packets));
+    buffer->next_expected_seq = 0;
 
     printf("Waiting for stream confirmation...\n");
 
-    int flag=ReceiveData(&sock_fd,msg_buffer);
-    if(flag==1)
-   {
-        while(1)
-        {
-        int res=ReceiveBufferPacket(sock_fd,&buffer);
-        if(res>0)
-        {
-            AudioPacket* packet;
-              while ((packet = GetNextPacket(&buffer)) != NULL) {
-            fwrite(packet->AudioDataPCM, sizeof(uint16_t), ChunkBytes, output_file);
-            free(packet);
+    int flag = ReceiveData(&sock_fd, msg_buffer);
+    if(flag == 1) {
+        printf("Buffering initial packets...\n");
+        while(buffer->count < 5) {
+            int res = ReceiveBufferPacket(sock_fd, buffer);
+            if(res > 0) {
+                printf("Initial buffering: %d packets\n", buffer->count);
+            }
         }
+        Pa_StartStream(stream);
+        printf("Audio playback started with %d packets buffered\n", buffer->count);
+        
+        while(1) {
+            int res = ReceiveBufferPacket(sock_fd, buffer);
+            if(res > 0) {
+                printf("Buffered packet, buffer has %d packets\n", buffer->count);
+            }
         }
-
-   }
-
-}
-
+    }
+    Pa_StopStream(stream);
+    Pa_CloseStream(stream);
+    Pa_Terminate();
+    fclose(output_file);
 }

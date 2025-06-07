@@ -12,7 +12,9 @@ int main(int argc, char *argv[]) {
     }
     
     const char *server_ip = argv[1];
-    ReceiveAudio(server_ip);
+    AudioBuffer buffer;
+    init_circular_buffer(&buffer);
+    ReceiveAudio(server_ip, &buffer);
     
     return 0;
 }
