@@ -6,17 +6,20 @@ A distributed audio system that turns multiple devices into synchronized speaker
 
 ## Overview
 
-AudioSync connects phones, laptops, and tablets on the same network to create a DIY surround sound system. The project was inspired by wanting to enhance movie watching experiences without specialized audio equipment.
+AudioSync connects phones, laptops, and tablets on the same network to create a DIY surround sound system. The project was inspired by wanting to enhance movie watching experiences without specialized audio equipment. Currently, this project only supports systems with `Linux` and `macOS`.
 
-## Features
+## Current Features
 
-- Connect multiple devices as synchronized speakers
-- Stream audio from a host device to all connected clients
+- Connect a single device to send audio
+- Stream audio from a host device to connected client
 - Real-time playback synchronization
+- Converted mp3 to raw PCM audio which is further broken down to audio packets for transmission
+- Implemented custom Real-time Transmission Protocol(RTP)
+- Uses PortAudio for real-time audio processing and playback
 
 ## Technical Stack
 
-- Languages: C/C++
+- Languages: C
 - Audio: FFmpeg, PortAudio
 - Networking: UDP/TCP for real-time streaming
 
@@ -42,15 +45,18 @@ Before building, ensure you have PortAudio installed.
 
 ### Run:
 
-**Server:** `./build/sender`
+**Server:** `./build/sender input.raw`
 
-**Client:** `./build/client`
+**Client:** `./build/client <sender-ip-address>`
+
+On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 
 ## Next Steps
 
-- Audio capture and streaming
-- Synchronization mechanism
-- Cross-platform client applications
+- Streaming to multiple devices
+- Synchronization 
+- Multicasting
+- GUI Application
 
 ## License
 
