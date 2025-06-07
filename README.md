@@ -22,6 +22,20 @@ AudioSync connects phones, laptops, and tablets on the same network to create a 
 
 ## Getting Started
 
+### Prerequisites:
+
+Before building, ensure you have PortAudio installed.
+-   On Debian/Ubuntu-based systems:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install libportaudio2 libportaudio-dev
+    ```
+-   On macOS (using Homebrew):
+    ```bash
+    brew install portaudio
+    ```
+-   For other systems, please refer to the [PortAudio documentation](http://www.portaudio.com/docs/v19-doxydocs/tutorial_start.html).
+
 ### Build:
 
 `make all`
