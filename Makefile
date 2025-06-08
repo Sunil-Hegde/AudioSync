@@ -1,12 +1,12 @@
 # For macOS
 ifeq ($(shell uname), Darwin)
-    CC = clang
+	CC = clang
 else
-    CC = gcc
+	CC = gcc
 endif
 
-CFLAGS = -Wall -Wextra -I./include
-LDFLAGS = -lportaudio -lpthread
+CFLAGS = -Wall -Wextra -I./include -I/opt/homebrew/include
+LDFLAGS = -L/opt/homebrew/lib -lportaudio -lpthread
 BUILD_DIR = build
 SRC_DIR = src
 
@@ -25,7 +25,7 @@ $(SENDER): $(SENDER_SRC)
 
 $(RECEIVER): $(RECEIVER_SRC)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	 $(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -f $(SENDER) $(RECEIVER)

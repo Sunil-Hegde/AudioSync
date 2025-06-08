@@ -28,7 +28,7 @@
 
 typedef struct {
     uint32_t PacketNumber;
-    uint64_t timestamp_ms;
+    uint32_t timestamp_ms;
     uint16_t AudioDataPCM[PCM_DATA_SIZE_IN_ELEMENTS]; 
 } AudioPacket;
 
@@ -38,7 +38,7 @@ typedef struct {
     uint32_t next_expected_seq; 
 } AudioBuffer;
 
-uint64_t get_timestamp_ms(void);
+uint32_t get_timestamp_ms(void);
 AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_data,size_t bytes_read);
 void init_circular_buffer(AudioBuffer* buffer);
 AudioPacket* GetNextPacket(AudioBuffer* buffer);
