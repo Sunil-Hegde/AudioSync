@@ -2,132 +2,115 @@
 #include "audio.h"
 
 
-void SetupSender(int *sock_fd){
-    struct addrinfo server_description, *server;
-    char server_ip[INET6_ADDRSTRLEN];
-
-    memset(&server_description, 0, sizeof server_description);
-    server_description.ai_family = AF_INET;
-    server_description.ai_socktype = SOCK_DGRAM;
-
-    getaddrinfo("0.0.0.0", PORT, &server_description, &server);
-    *sock_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
-    inet_ntop(AF_INET, &((struct sockaddr_in *)server->ai_addr)->sin_addr, server_ip, sizeof server_ip);
-    bind(*sock_fd, server->ai_addr, server->ai_addrlen);
-
-    printf("UDP Server running at IP: %s and port %s.\n", server_ip, PORT);
+void SetupSender(int *sock_fd) {
+    *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int ttl = MULTICAST_TTL;  
+    setsockopt(*sock_fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+    printf("Multicast sender ready for group %s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
 }
 
-void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size){
-    static struct sockaddr_storage client_addr;  
-    static socklen_t client_addr_size = sizeof(client_addr);  
-    static int client_connected = 0;  
+void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size) {
+    struct sockaddr_in multicast_addr;
+    memset(&multicast_addr, 0, sizeof(multicast_addr));
+    multicast_addr.sin_family = AF_INET;
+    multicast_addr.sin_addr.s_addr = inet_addr(MULTICAST_GROUP);
+    multicast_addr.sin_port = htons(MULTICAST_PORT);
+
+    ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0,
+                               (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+    if (bytes_sent == -1) {
+        perror("sender: sendto");
+    } else if ((size_t)bytes_sent != packet_size) {
+        fprintf(stderr, "sender: partial packet sent (%zd of %zu bytes)\n", 
+                bytes_sent, packet_size);
+    }
+}
+
+void SetupReceiver(const char *ServerIP, int *sock_fd) {
+    (void)ServerIP; // Ignore ServerIP parameter for multicast
     
-    if(!client_connected){
-        char client_ip[INET6_ADDRSTRLEN];
-        char buffer[1024];
-
-        int bytes_received = recvfrom(*sock_fd, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&client_addr, &client_addr_size);
-
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0';
-            struct sockaddr_in *client_in = (struct sockaddr_in*)&client_addr;
-            inet_ntop(AF_INET, &client_in->sin_addr, client_ip, sizeof(client_ip));
-            printf("Received from client %s: %s\n", client_ip, buffer);
-            client_connected = 1; 
-            const char *confirm_msg = "READY_TO_STREAM";
-            sendto(*sock_fd, confirm_msg, strlen(confirm_msg), 0, (struct sockaddr*)&client_addr, client_addr_size);
-        } else {
-            perror("recvfrom failed");
-        }
+    *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (*sock_fd < 0) {
+        perror("receiver: socket");
+        exit(1);
     }
 
-    if(client_connected){
-        ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0, (struct sockaddr*)&client_addr, client_addr_size);
-        if (bytes_sent > 0) {
-            printf("Sent packet %u\n", packet->PacketNumber);
-        } else {
-            perror("Failed to send packet");
-            client_connected = 0;  
-        }
+    // Allow multiple receivers on same machine
+    int reuse = 1;
+    if (setsockopt(*sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        perror("receiver: setsockopt SO_REUSEADDR");
+        close(*sock_fd);
+        exit(1);
     }
+
+    // Bind to multicast port
+    struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_addr.s_addr = INADDR_ANY;
+    local_addr.sin_port = htons(MULTICAST_PORT);
+
+    if (bind(*sock_fd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
+        perror("receiver: bind");
+        close(*sock_fd);
+        exit(1);
+    }
+
+    // Join multicast group
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_GROUP);
+    mreq.imr_interface.s_addr = INADDR_ANY;
+
+    if (setsockopt(*sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("receiver: join group");
+        close(*sock_fd);
+        exit(1);
+    }
+
+    printf("Receiver joined multicast group %s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
 }
 
-void SetupReceiver(const char *ServerIP, int *sock_fd){
-    struct addrinfo server_description, *server;
-    int status;
-
-    memset(&server_description, 0, sizeof server_description);
-    server_description.ai_family = AF_INET;
-    server_description.ai_socktype = SOCK_DGRAM;
-
-    getaddrinfo(ServerIP, PORT, &server_description, &server);
-    *sock_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
-
-    printf("Setting up client to server at IP: %s\n", ServerIP);
-
-    status = connect(*sock_fd, server->ai_addr, server->ai_addrlen);
-
-    if(status != -1){
-        printf("Connected to server!\n");
-        char *message_from_client = "Hello!";
-        send(*sock_fd, message_from_client, strlen(message_from_client), 0);
-        printf("Sent initial message to server\n");
-    } else {
-        printf("Invalid IP\n");
-    }
-}
-
-int ReceiveData(int *sock_fd, char *buffer){
-    while(1){
-        int bytes_received = recv(*sock_fd, buffer, 1023, 0);
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0';
-            printf("Message from server: %s\n", buffer);
-            if(strcmp(buffer,"READY_TO_STREAM")==0){
-                printf("Receiving audio..");
-                return 1;
-            }
-        } else {
-            perror("recv");
-            return 0;
-        }
-    }
-}
-
-void PacketSetupAndSend(FILE *audio_file){
+void PacketSetupAndSend(FILE *audio_file) {
     int sock_fd;
     SetupSender(&sock_fd);
-    printf("Starting stream..");
     
     uint32_t packet_number = 0;
-    uint16_t audio_buffer[PCM_DATA_SIZE_IN_ELEMENTS]; 
-    int done=0;
-    while(!done){
-        size_t elements_read = fread(audio_buffer, sizeof(uint16_t), PCM_DATA_SIZE_IN_ELEMENTS, audio_file); 
+    uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
+    int stream_active = 1;
+
+    printf("Starting multicast audio stream\n");
+    printf("Press Ctrl+C to stop\n");
+
+    while(stream_active) {
+        size_t elements_read = fread(pcm_read_buffer, sizeof(uint16_t), 
+                                   PCM_DATA_SIZE_IN_ELEMENTS, audio_file);
         if(elements_read == 0) {
-            printf("End of file reached, stopping stream.\n");
-            done = 1;
+            if (feof(audio_file)) {
+                printf("End of file, looping...\n");
+                rewind(audio_file);
+                continue;
+            } else if (ferror(audio_file)) {
+                perror("sender: fread");
+            }
+            stream_active = 0;
             break;
         }
-        AudioPacket* packet = create_audio_packet(packet_number, audio_buffer, elements_read);
+
+        AudioPacket* packet = create_audio_packet(packet_number, pcm_read_buffer, elements_read);
         if (!packet) {
-            fprintf(stderr, "Failed to create audio packet\n");
+            fprintf(stderr, "Failed to create packet %u\n", packet_number);
             continue;
         }
-        size_t packet_size = sizeof(AudioPacket);
-        SendData(&sock_fd, packet,packet_size);
+        
+        SendData(&sock_fd, packet, sizeof(AudioPacket));
         
         free(packet);
         packet_number++;
-        usleep(25000);     
+        usleep(25000); // ~25ms for proper timing
     }
 
-    printf("Audio streaming complete. Sent %u packets.\n", packet_number);
-    
+    printf("Streaming complete. Sent %u packets.\n", packet_number);
     close(sock_fd);
-    return;
-
 }
 
 static int networkAudioCallback(
@@ -156,7 +139,6 @@ static int networkAudioCallback(
 
 void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
     int sock_fd;
-    char msg_buffer[1024];
     FILE *output_file = fopen("output.raw", "wb");
     if (!output_file) {
         perror("Failed to open output file");
@@ -180,25 +162,20 @@ void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
     memset(buffer->packets, 0, sizeof(buffer->packets));
     buffer->next_expected_seq = 0;
 
-    printf("Waiting for stream confirmation...\n");
-
-    int flag = ReceiveData(&sock_fd, msg_buffer);
-    if(flag == 1) {
-        printf("Buffering initial packets...\n");
-        while(buffer->count < 5) {
-            int res = ReceiveBufferPacket(sock_fd, buffer);
-            if(res > 0) {
-                printf("Initial buffering: %d packets\n", buffer->count);
-            }
+    printf("Buffering initial packets...\n");
+    while(buffer->count < 5) {
+        int res = ReceiveBufferPacket(sock_fd, buffer);
+        if(res > 0) {
+            printf("Initial buffering: %d packets\n", buffer->count);
         }
-        Pa_StartStream(stream);
-        printf("Audio playback started with %d packets buffered\n", buffer->count);
-        
-        while(1) {
-            int res = ReceiveBufferPacket(sock_fd, buffer);
-            if(res > 0) {
-                printf("Buffered packet, buffer has %d packets\n", buffer->count);
-            }
+    }
+    Pa_StartStream(stream);
+    printf("Audio playback started with %d packets buffered\n", buffer->count);
+    
+    while(1) {
+        int res = ReceiveBufferPacket(sock_fd, buffer);
+        if(res > 0) {
+            printf("Buffered packet, buffer has %d packets\n", buffer->count);
         }
     }
     Pa_StopStream(stream);

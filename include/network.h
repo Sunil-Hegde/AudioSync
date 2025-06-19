@@ -24,6 +24,10 @@
 
 #define PORT "6000"
 
+#define MULTICAST_GROUP "239.0.0.1"
+#define MULTICAST_PORT 12345
+#define MULTICAST_TTL 1
+
 void SetupSender(int *sock_fd);
 void SendData(int *sock_fd, const AudioPacket *packet,size_t packet_size);
 void SetupReceiver(const char *ServerIP, int *sock_fd);  
