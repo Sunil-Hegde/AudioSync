@@ -5,8 +5,8 @@ else
     CC = gcc
 endif
 
-CFLAGS = -Wall -Wextra -I./include
-LDFLAGS = -lportaudio -lpthread
+CFLAGS = -Wall -Wextra -I./include -I/opt/homebrew/include
+LDFLAGS = -L/opt/homebrew/lib -lportaudio -lpthread
 BUILD_DIR = build
 SRC_DIR = src
 
