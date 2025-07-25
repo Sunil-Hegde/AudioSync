@@ -47,7 +47,7 @@ Before building, ensure you have PortAudio installed.
 
 **Server:** `./build/sender input.raw`
 
-**Client:** `./build/client <sender-ip-address>`
+**Client:** `./build/receiver <sender-ip-address>`
 
 On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 
