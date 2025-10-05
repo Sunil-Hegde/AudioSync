@@ -34,16 +34,12 @@ void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncP
     seq++;
 }
 
-void SetupReceiver(const char *ServerIP, int *sock_fd) {
-    (void)ServerIP; // Ignore ServerIP parameter for multicast
-    
+void SetupReceiver(int *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (*sock_fd < 0) {
         perror("receiver: socket");
         exit(1);
     }
-
-    // Allow multiple receivers on same machine
     int reuse = 1;
     if (setsockopt(*sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
         perror("receiver: setsockopt SO_REUSEADDR");
@@ -85,25 +81,19 @@ void PacketSetupAndSend(FILE *audio_file) {
     uint32_t packet_number = 0;
     uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
     int stream_active = 1;
-    
-    // Add proper timing control
     uint64_t start_time = get_timestamp_ns();
-    const uint64_t PACKET_INTERVAL_NS = 25000000ULL; // 25ms in nanoseconds
+    const uint64_t PACKET_INTERVAL_NS = 25000000ULL;
 
     printf("Starting multicast audio stream\n");
     printf("Press Ctrl+C to stop\n");
 
     while(stream_active) {
-        // Calculate when this packet should be sent
         uint64_t target_time = start_time + (packet_number * PACKET_INTERVAL_NS);
         uint64_t current_time = get_timestamp_ns();
-        
-        // Wait if we're ahead of schedule
         if (current_time < target_time) {
             uint64_t wait_ns = target_time - current_time;
-            usleep(wait_ns / 1000); // Convert ns to microseconds
+            usleep(wait_ns / 1000);
         }
-
         size_t elements_read = fread(pcm_read_buffer, sizeof(uint16_t), 
                                    PCM_DATA_SIZE_IN_ELEMENTS, audio_file);
         if(elements_read == 0) {
@@ -135,31 +125,24 @@ void PacketSetupAndSend(FILE *audio_file) {
     close(sock_fd);
 }
 
-int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer)
-{
-    char packet_buffer[sizeof(AudioPacket)]; // Use largest packet size
+int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
+    char packet_buffer[sizeof(AudioPacket)];
     ssize_t bytes_received = recv(sock_fd, packet_buffer, sizeof(packet_buffer), 0);
-    
     if (bytes_received < 0){
         perror("Failed to receive packet");
         return -1;
     }
-
     if (bytes_received == 0){
         printf("Connection closed by sender\n");
         return 0;
     }
-
-    // Check packet type based on size
     if (bytes_received == sizeof(SyncPacket)) {
-        // Handle sync packet
         SyncPacket *sync_packet = (SyncPacket*)packet_buffer;
         get_client_time(sync_packet);
         printf("Received sync packet, offset: %lld ns\n", sync_packet->client_offset);
-        return 1; // Don't process as audio packet
+        return 1;
     }
     else if (bytes_received == sizeof(AudioPacket)) {
-        // Handle audio packet
         AudioPacket *received_packet = malloc(sizeof(AudioPacket));
         if (!received_packet) {
             perror("Failed to allocate memory for packet");
@@ -214,7 +197,7 @@ static int networkAudioCallback(
     }
 }
 
-void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
+void ReceiveAudio(AudioBuffer *buffer){
     int sock_fd;
     Pa_Initialize();
     
@@ -230,7 +213,7 @@ void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
         SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff,
         networkAudioCallback, buffer);
 
-    SetupReceiver(ServerIP, &sock_fd);
+    SetupReceiver(&sock_fd);
     memset(buffer->packets, 0, sizeof(buffer->packets));
     buffer->next_expected_seq = 0;
 

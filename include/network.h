@@ -46,9 +46,9 @@ struct ip_mreq
 // Function declarations
 void SetupSender(int *sock_fd);
 void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncPacket *sync_packet);
-void SetupReceiver(const char *ServerIP, int *sock_fd);
+void SetupReceiver(int *sock_fd);
 void PacketSetupAndSend(FILE *audio_file);
 int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer);
-void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer);
+void ReceiveAudio(AudioBuffer *buffer);
 
 #endif // NETWORK_H

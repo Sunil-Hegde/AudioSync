@@ -6,16 +6,10 @@
 #include <errno.h>
 #include <fcntl.h>
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        printf("Usage: %s <sender_ip> \n", argv[0]);
-        return 1;
-    }
-    
-    const char *server_ip = argv[1];
+int main() {
     AudioBuffer buffer;
     init_circular_buffer(&buffer);
-    ReceiveAudio(server_ip, &buffer);
+    ReceiveAudio(&buffer);
     
     return 0;
 }
