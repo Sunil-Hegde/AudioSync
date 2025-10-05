@@ -12,6 +12,8 @@
 
 #include <portaudio.h>
 
+#include "ntp.h"
+
 #define SAMPLE_RATE 44100
 // Sample Format: 16-bit
 #define CHANNELS 2
@@ -28,7 +30,7 @@
 
 typedef struct {
     uint32_t PacketNumber;
-    uint64_t timestamp_ms;
+    uint64_t timestamp_ns;
     uint16_t AudioDataPCM[PCM_DATA_SIZE_IN_ELEMENTS]; 
 } AudioPacket;
 
@@ -38,10 +40,9 @@ typedef struct {
     uint32_t next_expected_seq; 
 } AudioBuffer;
 
-uint64_t get_timestamp_ms(void);
+uint64_t get_timestamp_ns(void);
 AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_data,size_t bytes_read);
 void init_circular_buffer(AudioBuffer* buffer);
 AudioPacket* GetNextPacket(AudioBuffer* buffer);
-int ReceiveBufferPacket(int sock_fd,AudioBuffer* buffer);
 
 #endif

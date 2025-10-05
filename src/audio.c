@@ -1,12 +1,5 @@
 #include "audio.h"
 
-uint64_t get_timestamp_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint32_t)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
-}
-
 // Function to create Audio Packets while sending
 AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, size_t elements_read)
 {
@@ -15,7 +8,7 @@ AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_dat
         return NULL;
 
     packet->PacketNumber = packet_number;
-    packet->timestamp_ms = get_timestamp_ms();
+    packet->timestamp_ns = get_timestamp_ns();
 
     memset(packet->AudioDataPCM, 0, sizeof(packet->AudioDataPCM));
 
@@ -74,53 +67,4 @@ AudioPacket *GetNextPacket(AudioBuffer *buffer)
         }
         return NULL;
     }
-}
-
-int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer)
-{
-    AudioPacket *received_packet = malloc(sizeof(AudioPacket));
-    if (!received_packet)
-    {
-        perror("Failed to allocate memory for packet");
-        return -1;
-    }
-
-    ssize_t bytes_received = recv(sock_fd, received_packet, sizeof(AudioPacket), 0);
-
-    if (bytes_received < 0)
-    {
-        perror("Failed to receive packet");
-        free(received_packet);
-        return -1;
-    }
-
-    if (bytes_received == 0)
-    {
-        printf("Connection closed by sender\n");
-        free(received_packet);
-        return 0;
-    }
-
-    if (bytes_received != sizeof(AudioPacket))
-    {
-        printf("Warning: Received incomplete packet (%zd bytes)\n", bytes_received);
-        free(received_packet);
-        return -1;
-    }
-
-    printf("Received packet %u, timestamp: %llu ms\n",
-           received_packet->PacketNumber, received_packet->timestamp_ms);
-
-    uint32_t buffer_index = received_packet->PacketNumber % MAX_BUFFER_SIZE;
-    if (buffer->packets[buffer_index] != NULL)
-    {
-        printf("Replacing packet at index %u\n", buffer_index);
-        free(buffer->packets[buffer_index]);
-        buffer->count--;
-    }
-    buffer->packets[buffer_index] = received_packet;
-    buffer->count++;
-    printf("Buffered packet %u at index %u (total: %d packets)\n",
-           received_packet->PacketNumber, buffer_index, buffer->count);
-    return 1;
 }

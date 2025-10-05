@@ -1,21 +1,28 @@
 #include "network.h"
-#include "audio.h"
+#include <fcntl.h>
 
+static struct sockaddr_in multicast_addr;
 
 void SetupSender(int *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     int ttl = MULTICAST_TTL;  
     setsockopt(*sock_fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
-    printf("Multicast sender ready for group %s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
-}
 
-void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size) {
-    struct sockaddr_in multicast_addr;
     memset(&multicast_addr, 0, sizeof(multicast_addr));
     multicast_addr.sin_family = AF_INET;
     multicast_addr.sin_addr.s_addr = inet_addr(MULTICAST_GROUP);
     multicast_addr.sin_port = htons(MULTICAST_PORT);
 
+    printf("Multicast sender ready for group %s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
+}
+
+void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncPacket *sync_packet){
+    static uint32_t seq = 0;
+    if (seq % 10 == 0){
+        get_server_time(sync_packet, seq);
+        sendto(*sock_fd, sync_packet, sizeof(SyncPacket), 0,
+            (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+    }
     ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0,
                                (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
     if (bytes_sent == -1) {
@@ -24,6 +31,7 @@ void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size) {
         fprintf(stderr, "sender: partial packet sent (%zd of %zu bytes)\n", 
                 bytes_sent, packet_size);
     }
+    seq++;
 }
 
 void SetupReceiver(const char *ServerIP, int *sock_fd) {
@@ -77,11 +85,25 @@ void PacketSetupAndSend(FILE *audio_file) {
     uint32_t packet_number = 0;
     uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
     int stream_active = 1;
+    
+    // Add proper timing control
+    uint64_t start_time = get_timestamp_ns();
+    const uint64_t PACKET_INTERVAL_NS = 25000000ULL; // 25ms in nanoseconds
 
     printf("Starting multicast audio stream\n");
     printf("Press Ctrl+C to stop\n");
 
     while(stream_active) {
+        // Calculate when this packet should be sent
+        uint64_t target_time = start_time + (packet_number * PACKET_INTERVAL_NS);
+        uint64_t current_time = get_timestamp_ns();
+        
+        // Wait if we're ahead of schedule
+        if (current_time < target_time) {
+            uint64_t wait_ns = target_time - current_time;
+            usleep(wait_ns / 1000); // Convert ns to microseconds
+        }
+
         size_t elements_read = fread(pcm_read_buffer, sizeof(uint16_t), 
                                    PCM_DATA_SIZE_IN_ELEMENTS, audio_file);
         if(elements_read == 0) {
@@ -102,15 +124,70 @@ void PacketSetupAndSend(FILE *audio_file) {
             continue;
         }
         
-        SendData(&sock_fd, packet, sizeof(AudioPacket));
+        SyncPacket sync_packet;
+        SendData(&sock_fd, packet, sizeof(AudioPacket), &sync_packet);
         
         free(packet);
         packet_number++;
-        usleep(25000); // ~25ms for proper timing
     }
 
     printf("Streaming complete. Sent %u packets.\n", packet_number);
     close(sock_fd);
+}
+
+int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer)
+{
+    char packet_buffer[sizeof(AudioPacket)]; // Use largest packet size
+    ssize_t bytes_received = recv(sock_fd, packet_buffer, sizeof(packet_buffer), 0);
+    
+    if (bytes_received < 0){
+        perror("Failed to receive packet");
+        return -1;
+    }
+
+    if (bytes_received == 0){
+        printf("Connection closed by sender\n");
+        return 0;
+    }
+
+    // Check packet type based on size
+    if (bytes_received == sizeof(SyncPacket)) {
+        // Handle sync packet
+        SyncPacket *sync_packet = (SyncPacket*)packet_buffer;
+        get_client_time(sync_packet);
+        printf("Received sync packet, offset: %lld ns\n", sync_packet->client_offset);
+        return 1; // Don't process as audio packet
+    }
+    else if (bytes_received == sizeof(AudioPacket)) {
+        // Handle audio packet
+        AudioPacket *received_packet = malloc(sizeof(AudioPacket));
+        if (!received_packet) {
+            perror("Failed to allocate memory for packet");
+            return -1;
+        }
+        
+        memcpy(received_packet, packet_buffer, sizeof(AudioPacket));
+        
+        printf("Received packet %u, timestamp: %llu ns\n",
+               received_packet->PacketNumber, received_packet->timestamp_ns);
+
+        uint32_t buffer_index = received_packet->PacketNumber % MAX_BUFFER_SIZE;
+        if (buffer->packets[buffer_index] != NULL){
+            printf("Replacing packet at index %u\n", buffer_index);
+            free(buffer->packets[buffer_index]);
+            buffer->count--;
+        }
+        buffer->packets[buffer_index] = received_packet;
+        buffer->count++;
+        printf("Buffered packet %u at index %u (total: %d packets)\n",
+               received_packet->PacketNumber, buffer_index, buffer->count);
+        
+        return 1;
+    }
+    else {
+        printf("Warning: Received packet with unexpected size (%zd bytes)\n", bytes_received);
+        return -1;
+    }
 }
 
 static int networkAudioCallback(
@@ -123,12 +200,12 @@ static int networkAudioCallback(
     (void)inputBuffer; (void)timeInfo; (void)statusFlags;
     
     AudioBuffer *buffer = (AudioBuffer*)userData;
-    int16_t *out = (int16_t*)outputBuffer;
+    uint16_t *out = (uint16_t*)outputBuffer;
     size_t samplesToWrite = framesPerBuffer * CHANNELS;
 
     AudioPacket* packet = GetNextPacket(buffer);
     if (packet != NULL) {
-        memcpy(out, packet->AudioDataPCM, samplesToWrite * sizeof(int16_t));
+        memcpy(out, packet->AudioDataPCM, samplesToWrite * sizeof(uint16_t));
         free(packet);
         return paContinue;
     } else {
@@ -139,11 +216,6 @@ static int networkAudioCallback(
 
 void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
     int sock_fd;
-    FILE *output_file = fopen("output.raw", "wb");
-    if (!output_file) {
-        perror("Failed to open output file");
-        return;
-    }
     Pa_Initialize();
     
     PaStream *stream;
@@ -181,5 +253,4 @@ void ReceiveAudio(const char *ServerIP, AudioBuffer *buffer){
     Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
-    fclose(output_file);
 }
