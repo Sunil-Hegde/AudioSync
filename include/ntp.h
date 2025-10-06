@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <time.h>
+#include <arpa/inet.h>
 
 #ifdef __APPLE__
 #include <libkern/OSByteOrder.h>

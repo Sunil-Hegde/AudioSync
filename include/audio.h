@@ -43,6 +43,7 @@ typedef struct {
 uint64_t get_timestamp_ns(void);
 AudioPacket* create_audio_packet(uint32_t packet_number, const uint16_t* pcm_data,size_t bytes_read);
 void init_circular_buffer(AudioBuffer* buffer);
+void reset_buffer_for_midstream(AudioBuffer *buffer);
 AudioPacket* GetNextPacket(AudioBuffer* buffer);
 
 #endif

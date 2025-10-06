@@ -28,6 +28,7 @@
 #define IP_ADD_MEMBERSHIP 12
 #endif
 
+#ifdef __APPLE__
 // Define struct ip_mreq if not available
 #ifndef _STRUCT_IP_MREQ
 #define _STRUCT_IP_MREQ
@@ -36,6 +37,7 @@ struct ip_mreq
     struct in_addr imr_multiaddr;
     struct in_addr imr_interface;
 };
+#endif
 #endif
 
 #define PORT "6000"

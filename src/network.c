@@ -2,6 +2,10 @@
 #include <fcntl.h>
 
 static struct sockaddr_in multicast_addr;
+static int64_t current_time_offset = 0;
+static int first_sync_received = 0;
+static uint64_t stream_start_time = 0;
+static uint64_t local_stream_start = 0;
 
 void SetupSender(int *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -81,19 +85,22 @@ void PacketSetupAndSend(FILE *audio_file) {
     uint32_t packet_number = 0;
     uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
     int stream_active = 1;
-    uint64_t start_time = get_timestamp_ns();
+    
+    // Initialize stream start time
+    stream_start_time = get_timestamp_ns();
     const uint64_t PACKET_INTERVAL_NS = 25000000ULL;
 
-    printf("Starting multicast audio stream\n");
+    printf("Starting multicast audio stream at time: %llu\n", stream_start_time);
     printf("Press Ctrl+C to stop\n");
 
     while(stream_active) {
-        uint64_t target_time = start_time + (packet_number * PACKET_INTERVAL_NS);
+        uint64_t target_time = stream_start_time + (packet_number * PACKET_INTERVAL_NS);
         uint64_t current_time = get_timestamp_ns();
         if (current_time < target_time) {
             uint64_t wait_ns = target_time - current_time;
             usleep(wait_ns / 1000);
         }
+        
         size_t elements_read = fread(pcm_read_buffer, sizeof(uint16_t), 
                                    PCM_DATA_SIZE_IN_ELEMENTS, audio_file);
         if(elements_read == 0) {
@@ -114,6 +121,9 @@ void PacketSetupAndSend(FILE *audio_file) {
             continue;
         }
         
+        // Set relative timestamp
+        packet->timestamp_ns = packet_number * PACKET_INTERVAL_NS;
+        
         SyncPacket sync_packet;
         SendData(&sock_fd, packet, sizeof(AudioPacket), &sync_packet);
         
@@ -128,6 +138,7 @@ void PacketSetupAndSend(FILE *audio_file) {
 int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
     char packet_buffer[sizeof(AudioPacket)];
     ssize_t bytes_received = recv(sock_fd, packet_buffer, sizeof(packet_buffer), 0);
+    
     if (bytes_received < 0){
         perror("Failed to receive packet");
         return -1;
@@ -136,10 +147,20 @@ int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
         printf("Connection closed by sender\n");
         return 0;
     }
+    
     if (bytes_received == sizeof(SyncPacket)) {
         SyncPacket *sync_packet = (SyncPacket*)packet_buffer;
         get_client_time(sync_packet);
-        printf("Received sync packet, offset: %lld ns\n", sync_packet->client_offset);
+        current_time_offset = sync_packet->client_offset;
+        printf("Updated time offset: %lld ns\n", current_time_offset);
+        
+        if (!first_sync_received) {
+            printf("First sync packet received - initializing local stream reference\n");
+            // Initialize local stream start time when we get first sync
+            local_stream_start = get_timestamp_ns();
+            first_sync_received = 1;
+        }
+        
         return 1;
     }
     else if (bytes_received == sizeof(AudioPacket)) {
@@ -150,9 +171,27 @@ int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
         }
         
         memcpy(received_packet, packet_buffer, sizeof(AudioPacket));
+        uint64_t relative_timestamp = received_packet->timestamp_ns;
         
-        printf("Received packet %u, timestamp: %llu ns\n",
-               received_packet->PacketNumber, received_packet->timestamp_ns);
+        // Calculate when this packet should be played locally
+        uint64_t target_play_time = local_stream_start + relative_timestamp;
+        
+        // If packet time is too far in the future, then adjust
+        uint64_t current_time = get_timestamp_ns();
+        int64_t time_diff = (int64_t)(target_play_time - current_time);
+
+        if (time_diff > 1000000000) { 
+            printf("Adjusting for mid-stream join: packet was %lld ms in future\n", 
+                   time_diff / 1000000);
+            local_stream_start = current_time - relative_timestamp + 100000000; // 100ms delay
+            target_play_time = local_stream_start + relative_timestamp;
+            printf("Adjusted local_stream_start to: %llu\n", local_stream_start);
+        }
+
+        received_packet->timestamp_ns = target_play_time;
+        
+        printf("Received packet %u, relative_time: %llu ns, target_play: %llu ns (in %lld ms)\n",
+               received_packet->PacketNumber, relative_timestamp, target_play_time, time_diff / 1000000);
 
         uint32_t buffer_index = received_packet->PacketNumber % MAX_BUFFER_SIZE;
         if (buffer->packets[buffer_index] != NULL){
@@ -185,7 +224,7 @@ static int networkAudioCallback(
     AudioBuffer *buffer = (AudioBuffer*)userData;
     uint16_t *out = (uint16_t*)outputBuffer;
     size_t samplesToWrite = framesPerBuffer * CHANNELS;
-
+    
     AudioPacket* packet = GetNextPacket(buffer);
     if (packet != NULL) {
         memcpy(out, packet->AudioDataPCM, samplesToWrite * sizeof(uint16_t));
