@@ -1,5 +1,4 @@
-#include "network.h"
-#include <fcntl.h>
+#include "common.h"
 
 static struct sockaddr_in multicast_addr;
 static int64_t current_time_offset = 0;

@@ -1,17 +1,8 @@
 #ifndef AUDIO_H
 #define AUDIO_H
 
-#include <stdio.h>
-#include <stdint.h>
-#include <unistd.h> 
-#include <stdlib.h>  
-#include <string.h>  
-
-#include <sys/time.h>
-#include <sys/socket.h>
-
-#include <portaudio.h>
-
+#include "common.h"
+#include "network.h"
 #include "ntp.h"
 
 #define SAMPLE_RATE 44100

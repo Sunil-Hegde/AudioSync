@@ -4,20 +4,9 @@
 #define _POSIX_C_SOURCE 200112L
 #define _DEFAULT_SOURCE
 
+#include "common.h"
 #include "audio.h"
 #include "ntp.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 
 // Define multicast constants for macOS
 #ifndef IP_MULTICAST_TTL
@@ -26,18 +15,6 @@
 
 #ifndef IP_ADD_MEMBERSHIP
 #define IP_ADD_MEMBERSHIP 12
-#endif
-
-#ifdef __APPLE__
-// Define struct ip_mreq if not available
-#ifndef _STRUCT_IP_MREQ
-#define _STRUCT_IP_MREQ
-struct ip_mreq
-{
-    struct in_addr imr_multiaddr;
-    struct in_addr imr_interface;
-};
-#endif
 #endif
 
 #define PORT "6000"

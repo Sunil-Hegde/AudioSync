@@ -1,11 +1,4 @@
-#include "network.h"
-#include "audio.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <time.h>
-#include <unistd.h>
+#include "common.h"
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

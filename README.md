@@ -15,6 +15,7 @@ AudioSync connects computers on the same network to create a DIY surround sound 
 - Uses UDP multicast for low-latency packet transfer
 - Real-time playback synchronization using custom NTP-like protocol
 - Uses PortAudio for real-time audio processing and playback
+- Multiple users can join the stream mid-way and still stay in-sync.
 
 ## Technical Stack
 
@@ -72,8 +73,9 @@ On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 
 ## What this doesn't have and areas of improvement
 
-- Users cant join in the middle of a stream, this has to do with how the packets are syncronized. Further work is required here.
 - Currently uses a multicast setup, hence volume control or different audio for different devices is not supported. So, this cannot be called truly surrond sound system, but it does the job.
+- The setup uses PortAudio for accessing the device's audio backend and implements only linux and macOS compilation in its makefile. Hence, only these two are supported as of now. While porting to windows is easy, building it for android will be significantly tougher since PortAudio doesn't support it officially.
+- Currently, audio streaming is only possible from a file, work has to be started to send real-time audio data to facilitate actual speaker extension feature.
 - GUI Application
 
 ## License

@@ -1,4 +1,4 @@
-#include "audio.h"
+#include "common.h"
 
 // Function to create Audio Packets while sending
 AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, size_t elements_read){
