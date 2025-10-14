@@ -6,6 +6,8 @@ static int first_sync_received = 0;
 static uint64_t stream_start_time = 0;
 static uint64_t local_stream_start = 0;
 
+OpusContext *context = NULL;
+
 void SetupSender(int *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     int ttl = MULTICAST_TTL;  
@@ -80,6 +82,8 @@ void SetupReceiver(int *sock_fd) {
 void PacketSetupAndSend(FILE *audio_file) {
     int sock_fd;
     SetupSender(&sock_fd);
+
+    context = opus_initialize();
     
     uint32_t packet_number = 0;
     uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
@@ -87,7 +91,7 @@ void PacketSetupAndSend(FILE *audio_file) {
     
     // Initialize stream start time
     stream_start_time = get_timestamp_ns();
-    const uint64_t PACKET_INTERVAL_NS = 25000000ULL;
+    const uint64_t PACKET_INTERVAL_NS = 20000000ULL;
 
     printf("Starting multicast audio stream at time: %llu\n", stream_start_time);
     printf("Press Ctrl+C to stop\n");
@@ -113,8 +117,8 @@ void PacketSetupAndSend(FILE *audio_file) {
             stream_active = 0;
             break;
         }
-
-        AudioPacket* packet = create_audio_packet(packet_number, pcm_read_buffer, elements_read);
+        
+        AudioPacket* packet = create_audio_packet(packet_number, pcm_read_buffer, elements_read, context);
         if (!packet) {
             fprintf(stderr, "Failed to create packet %u\n", packet_number);
             continue;
@@ -122,8 +126,9 @@ void PacketSetupAndSend(FILE *audio_file) {
         
         // Set relative timestamp
         packet->timestamp_ns = packet_number * PACKET_INTERVAL_NS;
-        
+    
         SyncPacket sync_packet;
+        printf("%lu", sizeof(packet));
         SendData(&sock_fd, packet, sizeof(AudioPacket), &sync_packet);
         
         free(packet);
@@ -226,11 +231,37 @@ static int networkAudioCallback(
     
     AudioPacket* packet = GetNextPacket(buffer);
     if (packet != NULL) {
-        memcpy(out, packet->AudioDataPCM, samplesToWrite * sizeof(uint16_t));
+        // Decode the Opus compressed data to PCM
+        int16_t decoded_pcm[PCM_DATA_SIZE_IN_ELEMENTS];
+        int decoded_frames = opus_decode_audio(context, 
+                                             packet->AudioDataPCM,  // This is actually compressed data
+                                             packet->opus_packet_size,
+                                             decoded_pcm);
+        
+        if (decoded_frames > 0) {
+            // Copy the decoded PCM data to output
+            printf("Decode success!\n");
+            size_t bytes_to_copy = (samplesToWrite < (size_t)(decoded_frames * CHANNELS)) ? 
+                                  samplesToWrite * sizeof(uint16_t) : 
+                                  decoded_frames * CHANNELS * sizeof(uint16_t);
+            memcpy(out, decoded_pcm, bytes_to_copy);
+            
+            // Fill remaining with silence if needed
+            if (bytes_to_copy < samplesToWrite * sizeof(uint16_t)) {
+                memset((uint8_t*)out + bytes_to_copy, 0, 
+                       samplesToWrite * sizeof(uint16_t) - bytes_to_copy);
+            }
+        } else {
+            // Decoding failed, output silence
+            memset(out, 0, samplesToWrite * sizeof(uint16_t));
+            printf("Warning: Opus decode failed for packet %u\n", packet->PacketNumber);
+        }
+        
         free(packet);
         return paContinue;
     } else {
-        memset(out, 0, samplesToWrite * sizeof(int16_t));
+        // No packet available, output silence
+        memset(out, 0, samplesToWrite * sizeof(uint16_t));
         return paContinue; 
     }
 }
@@ -238,6 +269,7 @@ static int networkAudioCallback(
 void ReceiveAudio(AudioBuffer *buffer){
     int sock_fd;
     Pa_Initialize();
+    context = opus_initialize();
     
     PaStream *stream;
     PaStreamParameters output;

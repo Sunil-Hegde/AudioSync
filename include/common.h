@@ -15,5 +15,6 @@
 #include "network.h"
 #include "audio.h"
 #include "ntp.h"
+#include "codec.h"
 
 #endif // COMMON_H

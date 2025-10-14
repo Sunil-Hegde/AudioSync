@@ -6,14 +6,14 @@ else
 endif
 
 CFLAGS = -Wall -Wextra -I./include -I/opt/homebrew/include
-LDFLAGS = -L/opt/homebrew/lib -lportaudio -lpthread
+LDFLAGS = -L/opt/homebrew/lib -lportaudio -lpthread -lopus
 BUILD_DIR = build
 SRC_DIR = src
 
 SENDER = $(BUILD_DIR)/sender
 RECEIVER = $(BUILD_DIR)/receiver
 
-COMMON_SRC = $(SRC_DIR)/network.c $(SRC_DIR)/audio.c $(SRC_DIR)/ntp.c
+COMMON_SRC = $(SRC_DIR)/network.c $(SRC_DIR)/audio.c $(SRC_DIR)/ntp.c $(SRC_DIR)/codec.c
 SENDER_SRC = $(SRC_DIR)/sender.c $(COMMON_SRC)
 RECEIVER_SRC = $(SRC_DIR)/receiver.c $(COMMON_SRC)
 

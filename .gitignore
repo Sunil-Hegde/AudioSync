@@ -2,5 +2,5 @@
 build
 test
 output.raw
-
+.Audiosync-venv
 baby.mp3

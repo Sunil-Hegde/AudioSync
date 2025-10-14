@@ -1,7 +1,7 @@
 #include "common.h"
 
 // Function to create Audio Packets while sending
-AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, size_t elements_read){
+AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, size_t elements_read, OpusContext *context){
     AudioPacket *packet = malloc(sizeof(AudioPacket));
     if (!packet)
         return NULL;
@@ -11,8 +11,13 @@ AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_dat
 
     memset(packet->AudioDataPCM, 0, sizeof(packet->AudioDataPCM));
 
-    size_t elements_to_copy = (elements_read < PCM_DATA_SIZE_IN_ELEMENTS) ? elements_read : PCM_DATA_SIZE_IN_ELEMENTS;
-    memcpy(packet->AudioDataPCM, pcm_data, elements_to_copy * sizeof(uint16_t));
+    // size_t elements_to_copy = (elements_read < PCM_DATA_SIZE_IN_ELEMENTS) ? elements_read : PCM_DATA_SIZE_IN_ELEMENTS;
+    packet->opus_packet_size = opus_encode_audio(context, (opus_int16*)pcm_data, packet->AudioDataPCM);
+    if (packet_number % 50 == 0) {  // Print every 50th packet to avoid spam
+        printf("Packet %u: Raw PCM: %d bytes → Opus: %d bytes (%.1f%% compression)\n", 
+               packet_number, PCM_DATA_SIZE_IN_BYTES, packet->opus_packet_size, 
+               (1.0 - (float)packet->opus_packet_size / PCM_DATA_SIZE_IN_BYTES) * 100.0);
+    }
     return packet;
 }
 
