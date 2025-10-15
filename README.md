@@ -16,18 +16,21 @@ AudioSync connects computers on the same network to create a DIY surround sound 
 - Real-time playback synchronization using custom NTP-like protocol
 - Uses PortAudio for real-time audio processing and playback
 - Multiple users can join the stream mid-way and still stay in-sync.
+- Opus audio compression for efficient network transmission.
 
 ## Technical Stack
 
 - Languages: C
-- Audio: FFmpeg, PortAudio
-- Networking: UDP for real-time streaming, custom NTP-like protocol for syncronization
+- Audio: FFmpeg, PortAudio, Opus codec
+- Networking: UDP for real-time streaming, custom NTP-like protocol for synchronization
 
 ## Getting Started
 
 ### Prerequisites:
 
-Before building, ensure you have PortAudio installed.
+Before building, ensure you have the required dependencies installed:
+
+**PortAudio:**
 -   On Debian/Ubuntu-based systems:
     ```bash
     sudo apt-get update
@@ -35,20 +38,31 @@ Before building, ensure you have PortAudio installed.
     ```
 -   On macOS (using Homebrew):
     ```bash
-    brew install portaudio
+    brew install portaudio opus
     ```
--   For other systems, please refer to the [PortAudio documentation](http://www.portaudio.com/docs/v19-doxydocs/tutorial_start.html).
+
+**Opus Codec:**
+-   On Debian/Ubuntu-based systems:
+    ```bash
+    sudo apt-get install libopus-dev
+    ```
+-   On macOS: 
+    ```bash
+    brew install opus
+    ```
+
+For other systems, please refer to the [PortAudio documentation](http://www.portaudio.com/docs/v19-doxydocs/tutorial_start.html) and [Opus documentation](https://opus-codec.org/).
 
 ### Audio File Requirements:
 
 The sender currently expects PCM audio files with these specifications:
 - **Format:** 16-bit PCM
-- **Sample Rate:** 44100 Hz
+- **Sample Rate:** 48000 Hz
 - **Channels:** 2 (Stereo)
 
 You can convert audio files using FFmpeg:
 ```bash
-ffmpeg -i input.mp3 -f s16le -ar 44100 -ac 2 output.raw
+ffmpeg -i input.mp3 -f s16le -ar 48000 -ac 2 output.raw
 ```
 
 ### Build:
@@ -66,7 +80,6 @@ ffmpeg -i input.mp3 -f s16le -ar 44100 -ac 2 output.raw
 On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 
 **Important Notes:**
-- Start the receiver before starting the sender
 - All devices must be on the same network
 - Uses multicast group `239.0.0.1:12345` by default
 - On some systems, you may need to run with `sudo` for network permissions
@@ -76,7 +89,6 @@ On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 - Currently uses a multicast setup, hence volume control or different audio for different devices is not supported. So, this cannot be called truly surrond sound system, but it does the job.
 - The setup uses PortAudio for accessing the device's audio backend and implements only linux and macOS compilation in its makefile. Hence, only these two are supported as of now. While porting to windows is easy, building it for android will be significantly tougher since PortAudio doesn't support it officially.
 - Currently, audio streaming is only possible from a file, work has to be started to send real-time audio data to facilitate actual speaker extension feature.
-- GUI Application
 
 ## License
 
