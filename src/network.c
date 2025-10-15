@@ -91,7 +91,6 @@ void PacketSetupAndSend(FILE *audio_file) {
     
     // Initialize stream start time
     stream_start_time = get_timestamp_ns();
-    const uint64_t PACKET_INTERVAL_NS = 20000000ULL;
 
     printf("Starting multicast audio stream at time: %llu\n", stream_start_time);
     printf("Press Ctrl+C to stop\n");
@@ -104,8 +103,10 @@ void PacketSetupAndSend(FILE *audio_file) {
             usleep(wait_ns / 1000);
         }
         
-        size_t elements_read = fread(pcm_read_buffer, sizeof(uint16_t), 
-                                   PCM_DATA_SIZE_IN_ELEMENTS, audio_file);
+        size_t elements_read = fread(pcm_read_buffer, 
+                                    sizeof(uint16_t), 
+                                   PCM_DATA_SIZE_IN_ELEMENTS, 
+                                   audio_file);
         if(elements_read == 0) {
             if (feof(audio_file)) {
                 printf("End of file, looping...\n");
@@ -118,7 +119,7 @@ void PacketSetupAndSend(FILE *audio_file) {
             break;
         }
         
-        AudioPacket* packet = create_audio_packet(packet_number, pcm_read_buffer, elements_read, context);
+        AudioPacket* packet = create_audio_packet(packet_number, pcm_read_buffer, context);
         if (!packet) {
             fprintf(stderr, "Failed to create packet %u\n", packet_number);
             continue;
@@ -166,8 +167,7 @@ int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
         }
         
         return 1;
-    }
-    else if (bytes_received == sizeof(AudioPacket)) {
+    } else if (bytes_received == sizeof(AudioPacket)) {
         AudioPacket *received_packet = malloc(sizeof(AudioPacket));
         if (!received_packet) {
             perror("Failed to allocate memory for packet");
@@ -234,13 +234,12 @@ static int networkAudioCallback(
         // Decode the Opus compressed data to PCM
         int16_t decoded_pcm[PCM_DATA_SIZE_IN_ELEMENTS];
         int decoded_frames = opus_decode_audio(context, 
-                                             packet->AudioDataPCM,  // This is actually compressed data
+                                             packet->OpusEncodedData,
                                              packet->opus_packet_size,
                                              decoded_pcm);
         
         if (decoded_frames > 0) {
             // Copy the decoded PCM data to output
-            printf("Decode success!\n");
             size_t bytes_to_copy = (samplesToWrite < (size_t)(decoded_frames * CHANNELS)) ? 
                                   samplesToWrite * sizeof(uint16_t) : 
                                   decoded_frames * CHANNELS * sizeof(uint16_t);

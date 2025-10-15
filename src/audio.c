@@ -1,7 +1,7 @@
 #include "common.h"
 
 // Function to create Audio Packets while sending
-AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, size_t elements_read, OpusContext *context){
+AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, OpusContext *context){
     AudioPacket *packet = malloc(sizeof(AudioPacket));
     if (!packet)
         return NULL;
@@ -9,10 +9,12 @@ AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_dat
     packet->PacketNumber = packet_number;
     packet->timestamp_ns = 0;
 
-    memset(packet->AudioDataPCM, 0, sizeof(packet->AudioDataPCM));
+    memset(packet->OpusEncodedData, 0, sizeof(packet->OpusEncodedData));
 
-    // size_t elements_to_copy = (elements_read < PCM_DATA_SIZE_IN_ELEMENTS) ? elements_read : PCM_DATA_SIZE_IN_ELEMENTS;
-    packet->opus_packet_size = opus_encode_audio(context, (opus_int16*)pcm_data, packet->AudioDataPCM);
+    packet->opus_packet_size = opus_encode_audio(context, 
+        (opus_int16*)pcm_data, 
+        packet->OpusEncodedData);
+        
     if (packet_number % 50 == 0) {  // Print every 50th packet to avoid spam
         printf("Packet %u: Raw PCM: %d bytes → Opus: %d bytes (%.1f%% compression)\n", 
                packet_number, PCM_DATA_SIZE_IN_BYTES, packet->opus_packet_size, 

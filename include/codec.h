@@ -3,6 +3,22 @@
 #include "common.h"
 #include <opus/opus.h>
 
+// Chunk Duration: 20ms
+#define PACKET_INTERVAL_NS 20000000ULL
+// Sample Format: 16-bit
+#define SAMPLE_RATE 48000
+#define CHANNELS 2
+
+#define ChunkBytes 3840
+#define FRAMES_PER_BUFFER (ChunkBytes / (CHANNELS * sizeof(uint16_t)))
+
+#define MAX_BUFFER_SIZE 50
+#define MAX_OUT_OF_ORDER 10
+
+#define PCM_DATA_SIZE_IN_BYTES ChunkBytes 
+#define PCM_DATA_SIZE_IN_ELEMENTS (PCM_DATA_SIZE_IN_BYTES / sizeof(uint16_t))
+#define MAX_OPUS_PACKET_SIZE 4000
+
 typedef struct {
     OpusEncoder *encoder;
     OpusDecoder *decoder;

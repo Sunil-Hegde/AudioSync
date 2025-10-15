@@ -8,15 +8,6 @@
 #include "audio.h"
 #include "ntp.h"
 
-// Define multicast constants for macOS
-#ifndef IP_MULTICAST_TTL
-#define IP_MULTICAST_TTL 10
-#endif
-
-#ifndef IP_ADD_MEMBERSHIP
-#define IP_ADD_MEMBERSHIP 12
-#endif
-
 #define PORT "6000"
 #define MULTICAST_GROUP "239.0.0.1"
 #define MULTICAST_PORT 12345
