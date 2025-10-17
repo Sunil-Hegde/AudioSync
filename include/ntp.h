@@ -1,7 +1,7 @@
-#pragma once
+#ifndef NTP_H
+#define NTP_H
+
 #include "common.h"
-#include "network.h"
-#include "audio.h"
 
 #ifdef __APPLE__
 #include <libkern/OSByteOrder.h>
@@ -20,3 +20,4 @@ typedef struct {
 
 void get_server_time(SyncPacket *sync_packet, uint32_t seq);
 void get_client_time(SyncPacket *sync_packet);
+#endif

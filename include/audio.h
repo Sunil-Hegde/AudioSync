@@ -2,8 +2,8 @@
 #define AUDIO_H
 
 #include "common.h"
-#include "ntp.h"
 #include "codec.h"
+
 typedef struct {
     uint32_t PacketNumber;
     uint64_t timestamp_ns;

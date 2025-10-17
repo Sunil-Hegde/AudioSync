@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <time.h>
 #include <portaudio.h>
+#include <opus/opus.h>
 #include "network.h"
 #include "audio.h"
 #include "ntp.h"

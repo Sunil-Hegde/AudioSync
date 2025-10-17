@@ -1,9 +1,6 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#define _POSIX_C_SOURCE 200112L
-#define _DEFAULT_SOURCE
-
 #include "common.h"
 #include "audio.h"
 #include "ntp.h"

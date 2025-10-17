@@ -1,7 +1,6 @@
 #ifndef CODEC_H
 #define CODEC_H
 #include "common.h"
-#include <opus/opus.h>
 
 // Chunk Duration: 20ms
 #define PACKET_INTERVAL_NS 20000000ULL
