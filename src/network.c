@@ -8,10 +8,31 @@ static uint64_t local_stream_start = 0;
 
 OpusContext *context = NULL;
 
-void SetupSender(int *sock_fd) {
+#ifdef _WINDOWS
+    static inline void sleep_ns_windows(uint64_t ns) {
+        LARGE_INTEGER freq, start, now;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&start);
+
+        int64_t target_ticks = ns * freq.QuadPart / 1000000000ULL;
+
+        do {
+            QueryPerformanceCounter(&now);
+        } while ((now.QuadPart - start.QuadPart) < target_ticks);
+    }
+
+    #define usleep(x) sleep_ns_windows((x) * 1000ULL)   
+#endif
+
+void SetupSender(socket_t *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    int ttl = MULTICAST_TTL;  
-    setsockopt(*sock_fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+    #ifdef _WINDOWS
+        u_char ttl = (u_char)MULTICAST_TTL;
+        setsockopt(*sock_fd, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, sizeof(ttl));
+    #else
+        int ttl = MULTICAST_TTL;  
+        setsockopt(*sock_fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+    #endif
 
     memset(&multicast_addr, 0, sizeof(multicast_addr));
     multicast_addr.sin_family = AF_INET;
@@ -21,15 +42,31 @@ void SetupSender(int *sock_fd) {
     printf("Multicast sender ready for group %s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
 }
 
-void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncPacket *sync_packet){
+void SendData(socket_t *sock_fd, const AudioPacket *packet, size_t packet_size, SyncPacket *sync_packet){
     static uint32_t seq = 0;
     if (seq % 10 == 0){
         get_server_time(sync_packet, seq);
-        sendto(*sock_fd, sync_packet, sizeof(SyncPacket), 0,
-            (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+        #ifdef _WINDOWS
+            sendto(*sock_fd, (const char *)sync_packet, (int)sizeof(SyncPacket), 0, (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+        #else
+            sendto(*sock_fd, sync_packet, sizeof(SyncPacket), 0,(struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+        #endif
     }
-    ssize_t bytes_sent = sendto(*sock_fd, packet, packet_size, 0,
-                               (struct sockaddr*)&multicast_addr, sizeof(multicast_addr));
+    #ifdef _WINDOWS
+            int bytes_sent = sendto(*sock_fd,
+                                    (const char *)packet,
+                                    (int)packet_size, 
+                                    0,
+                                    (struct sockaddr*)&multicast_addr,
+                                    sizeof(multicast_addr));
+        #else
+            ssize_t bytes_sent = sendto(*sock_fd,
+                                        packet,
+                                        packet_size,
+                                        0,
+                                        (struct sockaddr*)&multicast_addr,
+                                        sizeof(multicast_addr));
+        #endif
     if (bytes_sent == -1) {
         perror("sender: sendto");
     } else if ((size_t)bytes_sent != packet_size) {
@@ -39,16 +76,25 @@ void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncP
     seq++;
 }
 
-void SetupReceiver(int *sock_fd) {
+void SetupReceiver(socket_t *sock_fd) {
     *sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (*sock_fd < 0) {
         perror("receiver: socket");
         exit(1);
     }
     int reuse = 1;
-    if (setsockopt(*sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+    #ifdef _WINDOWS
+        if (setsockopt(*sock_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse)) < 0) {
+    #else
+        if (setsockopt(*sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+    #endif
         perror("receiver: setsockopt SO_REUSEADDR");
-        close(*sock_fd);
+        #ifdef _WINDOWS
+            closesocket(*sock_fd);
+            WSACleanup();
+        #else
+            close(*sock_fd);
+        #endif
         exit(1);
     }
 
@@ -61,7 +107,12 @@ void SetupReceiver(int *sock_fd) {
 
     if (bind(*sock_fd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
         perror("receiver: bind");
-        close(*sock_fd);
+        #ifdef _WINDOWS
+            closesocket(*sock_fd);
+            WSACleanup();
+        #else
+            close(*sock_fd);
+        #endif
         exit(1);
     }
 
@@ -69,10 +120,18 @@ void SetupReceiver(int *sock_fd) {
     struct ip_mreq mreq;
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_GROUP);
     mreq.imr_interface.s_addr = INADDR_ANY;
-
-    if (setsockopt(*sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+    #ifdef _WINDOWS
+        if (setsockopt(*sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&mreq, sizeof(mreq)) < 0) {
+    #else
+        if (setsockopt(*sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+    #endif
         perror("receiver: join group");
-        close(*sock_fd);
+        #ifdef _WINDOWS
+            closesocket(*sock_fd);
+            WSACleanup();
+        #else
+            close(*sock_fd);
+        #endif
         exit(1);
     }
 
@@ -80,7 +139,14 @@ void SetupReceiver(int *sock_fd) {
 }
 
 void PacketSetupAndSend(FILE *audio_file) {
-    int sock_fd;
+    #ifdef _WINDOWS
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+            fprintf(stderr, "WSAStartup failed\n");
+            return;
+        }
+    #endif
+    socket_t sock_fd;
     SetupSender(&sock_fd);
 
     context = opus_initialize();
@@ -137,10 +203,15 @@ void PacketSetupAndSend(FILE *audio_file) {
     }
 
     printf("Streaming complete. Sent %u packets.\n", packet_number);
-    close(sock_fd);
+    #ifdef _WINDOWS
+        closesocket(sock_fd);
+        WSACleanup();
+    #else
+        close(sock_fd);
+    #endif
 }
 
-int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer) {
+int ReceiveBufferPacket(socket_t sock_fd, AudioBuffer *buffer) {
     char packet_buffer[sizeof(AudioPacket)];
     ssize_t bytes_received = recv(sock_fd, packet_buffer, sizeof(packet_buffer), 0);
     
@@ -266,7 +337,14 @@ static int networkAudioCallback(
 }
 
 void ReceiveAudio(AudioBuffer *buffer){
-    int sock_fd;
+    #ifdef _WINDOWS
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+            fprintf(stderr, "WSAStartup failed\n");
+            return;
+        }
+    #endif
+    socket_t sock_fd;
     Pa_Initialize();
     context = opus_initialize();
     
@@ -305,4 +383,9 @@ void ReceiveAudio(AudioBuffer *buffer){
     Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
+    #ifdef _WINDOWS
+        closesocket(sock_fd);
+    #else
+        close(sock_fd);
+    #endif
 }

@@ -1,0 +1,27 @@
+x86_64-w64-mingw32-gcc -Wall -Wextra -I./include -D_WINDOWS src/sender.c src/network.c src/audio.c src/ntp.c src/codec.c -o build/sender.exe -lportaudio -lopus -lws2_32
+In file included from src/sender.c:1:
+./include/common.h:22:10: fatal error: portaudio.h: No such file or directory
+   22 | #include <portaudio.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+In file included from src/network.c:1:
+./include/common.h:22:10: fatal error: portaudio.h: No such file or directory
+   22 | #include <portaudio.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+In file included from src/audio.c:1:
+./include/common.h:22:10: fatal error: portaudio.h: No such file or directory
+   22 | #include <portaudio.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+In file included from src/ntp.c:1:
+./include/common.h:22:10: fatal error: portaudio.h: No such file or directory
+   22 | #include <portaudio.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+In file included from src/codec.c:1:
+./include/common.h:22:10: fatal error: portaudio.h: No such file or directory
+   22 | #include <portaudio.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+make: *** [build/sender.exe] Error 1
