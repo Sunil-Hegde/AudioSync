@@ -16,6 +16,6 @@ void SendData(int *sock_fd, const AudioPacket *packet, size_t packet_size, SyncP
 void SetupReceiver(int *sock_fd);
 void PacketSetupAndSend(FILE *audio_file);
 int ReceiveBufferPacket(int sock_fd, AudioBuffer *buffer);
-void ReceiveAudio(AudioBuffer *buffer);
+void ReceiveAudio(AudioBuffer *buffer, int channel);
 
 #endif // NETWORK_H

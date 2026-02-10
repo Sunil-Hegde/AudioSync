@@ -1,14 +1,15 @@
 #ifndef CODEC_H
 #define CODEC_H
 #include "common.h"
+#include <opus/opus_multistream.h>
 
 // Chunk Duration: 20ms
 #define PACKET_INTERVAL_NS 20000000ULL
 // Sample Format: 16-bit
 #define SAMPLE_RATE 48000
-#define CHANNELS 2
+#define CHANNELS 6
 
-#define ChunkBytes 3840
+#define ChunkBytes 11520
 #define FRAMES_PER_BUFFER (ChunkBytes / (CHANNELS * sizeof(uint16_t)))
 
 #define MAX_BUFFER_SIZE 50
@@ -19,8 +20,8 @@
 #define MAX_OPUS_PACKET_SIZE 4000
 
 typedef struct {
-    OpusEncoder *encoder;
-    OpusDecoder *decoder;
+    OpusMSEncoder *encoder;
+    OpusMSDecoder *decoder;
     int error;
 } OpusContext;
 

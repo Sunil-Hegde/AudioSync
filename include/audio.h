@@ -17,6 +17,11 @@ typedef struct {
     uint32_t next_expected_seq; 
 } AudioBuffer;
 
+typedef struct {
+    AudioBuffer *buffer;
+    int channel_index;
+} CallbackData;
+
 uint64_t get_timestamp_ns(void);
 AudioPacket* create_audio_packet(
     uint32_t packet_number,

@@ -84,7 +84,10 @@ void PacketSetupAndSend(FILE *audio_file) {
     SetupSender(&sock_fd);
 
     context = opus_initialize();
-    
+    if (context == NULL || context->error != OPUS_OK) {
+        printf("Opus init failed: %d\n", context ? context->error : -1);
+        return;
+    }
     uint32_t packet_number = 0;
     uint16_t pcm_read_buffer[PCM_DATA_SIZE_IN_ELEMENTS];
     int stream_active = 1;
@@ -224,8 +227,9 @@ static int networkAudioCallback(
     void *userData
 ) {
     (void)inputBuffer; (void)timeInfo; (void)statusFlags;
-    
-    AudioBuffer *buffer = (AudioBuffer*)userData;
+
+    CallbackData *data = (CallbackData*)userData;
+    AudioBuffer *buffer = data->buffer;
     uint16_t *out = (uint16_t*)outputBuffer;
     size_t samplesToWrite = framesPerBuffer * CHANNELS;
     
@@ -239,20 +243,15 @@ static int networkAudioCallback(
                                              decoded_pcm);
         
         if (decoded_frames > 0) {
-            // Copy the decoded PCM data to output
-            size_t bytes_to_copy = (samplesToWrite < (size_t)(decoded_frames * CHANNELS)) ? 
-                                  samplesToWrite * sizeof(uint16_t) : 
-                                  decoded_frames * CHANNELS * sizeof(uint16_t);
-            memcpy(out, decoded_pcm, bytes_to_copy);
-            
-            // Fill remaining with silence if needed
-            if (bytes_to_copy < samplesToWrite * sizeof(uint16_t)) {
-                memset((uint8_t*)out + bytes_to_copy, 0, 
-                       samplesToWrite * sizeof(uint16_t) - bytes_to_copy);
+            // Extract selected channel and duplicate to stereo output
+            for (int i = 0; i < decoded_frames; i++) {
+                int16_t sample = decoded_pcm[i * CHANNELS + data->channel_index];
+                out[i * 2]     = sample;  // Left speaker
+                out[i * 2 + 1] = sample;  // Right speaker
             }
         } else {
             // Decoding failed, output silence
-            memset(out, 0, samplesToWrite * sizeof(uint16_t));
+            memset(out, 0, framesPerBuffer * 2 * sizeof(int16_t));
             printf("Warning: Opus decode failed for packet %u\n", packet->PacketNumber);
         }
         
@@ -265,22 +264,34 @@ static int networkAudioCallback(
     }
 }
 
-void ReceiveAudio(AudioBuffer *buffer){
+void ReceiveAudio(AudioBuffer *buffer, int channel){
     int sock_fd;
     Pa_Initialize();
     context = opus_initialize();
     
+    if (channel < 0 || channel > 5) {
+        printf("Invalid channel index %d, defaulting to Front Left (0)\n", channel);
+        channel = 0;
+    }
+    
+    const char *channel_names[] = {"Front Left", "Front Right", "Center", "LFE (Subwoofer)", "Surround Left", "Surround Right"};
+    printf("Playing channel: %s\n", channel_names[channel]);
+
+    static CallbackData callback_data;
+    callback_data.buffer = buffer;
+    callback_data.channel_index = channel;
+
     PaStream *stream;
     PaStreamParameters output;
     output.device = Pa_GetDefaultOutputDevice();
-    output.channelCount = CHANNELS;
+    output.channelCount = 2;
     output.sampleFormat = paInt16;
     output.suggestedLatency = Pa_GetDeviceInfo(output.device)->defaultLowOutputLatency;
     output.hostApiSpecificStreamInfo = NULL;
 
     Pa_OpenStream(&stream, NULL, &output,
         SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff,
-        networkAudioCallback, buffer);
+        networkAudioCallback, &callback_data);
 
     SetupReceiver(&sock_fd);
     memset(buffer->packets, 0, sizeof(buffer->packets));
