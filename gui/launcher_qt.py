@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+
 #!/usr/bin/env python3
 """
 AudioSync Launcher - Native macOS Style with PyQt6

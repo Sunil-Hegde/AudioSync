@@ -1,4 +1,9 @@
-#include "common.h"
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+ */
+
+ #include "common.h"
 
 // Function to create Audio Packets while sending
 AudioPacket *create_audio_packet(uint32_t packet_number, const uint16_t *pcm_data, OpusContext *context){

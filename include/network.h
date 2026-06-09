@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+ */
+
 #ifndef NETWORK_H
 #define NETWORK_H
 

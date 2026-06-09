@@ -92,4 +92,7 @@ On Unix/Linux based systems, use `ip addr show` to find out sender's ip address.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.
+Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+
+This project is licensed under the [GPL v3](LICENSE) - see the LICENSE file for details.
+Individual files use SPDX identifiers for clean and concise licensing tracking.

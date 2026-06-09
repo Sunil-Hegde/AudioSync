@@ -1,4 +1,9 @@
-#include "common.h"
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+ */
+
+ #include "common.h"
 
 void get_server_time(SyncPacket *sync_packet, uint32_t seq){
     struct timespec ts;

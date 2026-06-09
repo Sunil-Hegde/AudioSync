@@ -1,4 +1,9 @@
-#include "common.h"
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2025 Sunil Hegde & Mythili Shetty
+ */
+
+ #include "common.h"
 
 static struct sockaddr_in multicast_addr;
 static int64_t current_time_offset = 0;
